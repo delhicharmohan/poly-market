@@ -5,7 +5,7 @@ let pool: Pool | null = null;
 
 export function getPool(): Pool {
   if (!pool) {
-    const connectionString = process.env.DATABASE_URL || 
+    const connectionString = process.env.DATABASE_URL ||
       `postgresql://${process.env.POSTGRES_USER || "indimarket"}:${process.env.POSTGRES_PASSWORD || "indimarket123"}@${process.env.POSTGRES_HOST || "localhost"}:${process.env.POSTGRES_PORT || "5432"}/${process.env.POSTGRES_DB || "indimarket"}`;
 
 
@@ -17,7 +17,7 @@ export function getPool(): Pool {
     });
 
     // Handle pool errors
-    pool.on("error", (err) => {
+    pool.on("error", (err: any) => {
       console.error("Unexpected error on idle client", err);
       console.error("Error details:", {
         message: err.message,
@@ -30,7 +30,7 @@ export function getPool(): Pool {
     pool.query("SELECT 1")
       .then(() => {
       })
-      .catch((err) => {
+      .catch((err: any) => {
         console.error("❌ Initial database connection test failed:", err.message);
         console.error("Connection error details:", {
           code: err.code,

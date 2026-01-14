@@ -30,7 +30,7 @@ class Transactions {
 
   private getTransactions(): Transaction[] {
     if (typeof window === "undefined") return [];
-    
+
     try {
       const stored = localStorage.getItem(this.STORAGE_KEY);
       if (!stored) return [];
@@ -43,7 +43,7 @@ class Transactions {
 
   private saveTransactions(transactions: Transaction[]): void {
     if (typeof window === "undefined") return;
-    
+
     try {
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(transactions));
     } catch (error) {
@@ -57,7 +57,7 @@ class Transactions {
     userEmail?: string
   ): Promise<void> {
     const potentialWin = wagerResult.stake * wagerResult.odds[wagerResult.selection];
-    
+
     const transaction: Transaction = {
       id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: "wager",
@@ -78,18 +78,18 @@ class Transactions {
     if (this.useDatabase) {
       try {
         const saved = await dbClient.saveTransaction({
-          wagerId: transaction.wagerId,
-          marketId: transaction.marketId,
-          marketTitle: transaction.marketTitle,
-          selection: transaction.selection,
-          stake: transaction.stake,
-          odds: transaction.odds,
-          potentialWin: transaction.potentialWin,
-          status: transaction.status,
-          marketStatus: transaction.marketStatus,
+          wagerId: transaction.wagerId!,
+          marketId: transaction.marketId!,
+          marketTitle: transaction.marketTitle!,
+          selection: transaction.selection!,
+          stake: transaction.stake!,
+          odds: transaction.odds!,
+          potentialWin: transaction.potentialWin!,
+          status: transaction.status!,
+          marketStatus: transaction.marketStatus!,
           email: userEmail,
         });
-        
+
         if (saved) {
           // Also save to localStorage as backup
           const transactions = this.getTransactions();

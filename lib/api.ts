@@ -3,13 +3,25 @@ import { Market, WagerRequest, WagerResponse, MarketCategory, MarketTerm } from 
 
 class IndimarketAPI {
   private apiEndpoint: string | null = null;
+  private apiKey: string | null = null;
 
   constructor() {
-    // Load API endpoint from localStorage on initialization
-    // API key is now managed server-side via environment variables
+    // Load config from localStorage on initialization
     if (typeof window !== "undefined") {
       this.apiEndpoint = localStorage.getItem("indimarket_api_endpoint");
+      this.apiKey = localStorage.getItem("indimarket_api_key");
     }
+  }
+
+  setApiKey(key: string) {
+    this.apiKey = key;
+    if (typeof window !== "undefined") {
+      localStorage.setItem("indimarket_api_key", key);
+    }
+  }
+
+  getApiKey(): string | null {
+    return this.apiKey;
   }
 
   setApiEndpoint(endpoint: string) {
@@ -39,7 +51,7 @@ class IndimarketAPI {
       const params: Record<string, string> = {};
       if (category) params.category = category;
       if (term) params.term = term;
-      
+
       const response = await axios.get<Market[]>("/api/markets", {
         headers: {
           ...headers,

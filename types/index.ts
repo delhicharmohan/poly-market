@@ -1,4 +1,4 @@
-export type MarketCategory = "Crypto" | "Finance" | "NFL" | "NBA" | "Cricket" | "Football" | "Politics" | "Election";
+export type MarketCategory = "Crypto" | "Finance" | "NFL" | "NBA" | "Cricket" | "Football" | "Politics" | "Election" | "World" | "Sports";
 export type MarketTerm = "Ultra Short" | "Short" | "Long";
 
 export interface Market {
