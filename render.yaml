@@ -11,7 +11,9 @@ services:
       - key: NODE_VERSION
         value: 20
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: poly-market-db
+          property: connectionString
       - key: MERCHANT_API_KEY
         sync: false
       - key: API_BASE_URL
@@ -31,4 +33,6 @@ services:
       - key: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
         sync: false
 
-
+databases:
+  - name: poly-market-db
+    plan: free
