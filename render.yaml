@@ -15,7 +15,7 @@ services:
       - key: MERCHANT_API_KEY
         sync: false
       - key: API_BASE_URL
-        value: https://api.indimarket.io/api/v1
+        value: https://antigravity-b2b.onrender.com/api/v1
       - key: NEXT_PUBLIC_FIREBASE_API_KEY
         sync: false
       - key: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
