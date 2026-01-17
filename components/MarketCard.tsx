@@ -63,7 +63,7 @@ export default function MarketCard({ market, onPlaceWager }: MarketCardProps) {
   const yesPercent = totalPool > 0 ? (poolYes / totalPool) * 100 : 50;
   const noPercent = 100 - yesPercent;
 
-  const marketImage = market.image || getMarketImage(market.category);
+  const marketImage = market.image || getMarketImage(market.category, market.title);
   const isClosingSoon = timeRemaining > 0 && timeRemaining < 24 * 60 * 60 * 1000; // Less than 24h
 
   return (
