@@ -40,6 +40,7 @@ export default function MarketCard({ market, onPlaceWager }: MarketCardProps) {
     : market.closure_timestamp || 0;
 
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
+  const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
     const updateCountdown = () => {
@@ -97,11 +98,12 @@ export default function MarketCard({ market, onPlaceWager }: MarketCardProps) {
 
           {/* Small Thumbnail */}
           <div className="relative flex-shrink-0">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm bg-slate-50 dark:bg-slate-900">
               <img
-                src={marketImage}
+                src={imgError ? "https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?auto=format&fit=crop&q=80&w=800" : marketImage}
                 alt={market.title}
                 loading="lazy"
+                onError={() => setImgError(true)}
                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
               />
             </div>
