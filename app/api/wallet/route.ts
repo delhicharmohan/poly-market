@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
       detail: error.detail,
     });
     return NextResponse.json(
-      { 
+      {
         message: error.message || "Failed to fetch balance",
         error: process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
@@ -74,6 +74,13 @@ export async function POST(request: NextRequest) {
     if (!type || !amount || (type !== "deposit" && type !== "withdraw")) {
       return NextResponse.json(
         { message: "Invalid request. Type must be 'deposit' or 'withdraw', and amount is required." },
+        { status: 400 }
+      );
+    }
+
+    if (amount <= 0) {
+      return NextResponse.json(
+        { message: "Amount must be greater than 0" },
         { status: 400 }
       );
     }
@@ -151,7 +158,7 @@ export async function POST(request: NextRequest) {
       detail: error.detail,
     });
     return NextResponse.json(
-      { 
+      {
         message: error.message || "Failed to process transaction",
         error: process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
