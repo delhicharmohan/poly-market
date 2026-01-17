@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { ArrowLeft, Settings, User, LogOut, Mail, TrendingUp } from "lucide-react";
+import { ArrowLeft, User, LogOut, Mail, TrendingUp } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { useAuth } from "@/lib/auth";
 import TransactionsList from "@/components/TransactionsList";
@@ -55,7 +54,7 @@ export default function MorePage() {
         >
           <ArrowLeft className="h-5 w-5 mr-2" />
         </button>
-        
+
         {!showTransactions && (
           <>
             {/* User Profile Section */}
@@ -79,7 +78,7 @@ export default function MorePage() {
             </div>
           </>
         )}
-        
+
         {showTransactions ? (
           /* Transactions View */
           <div>
@@ -95,15 +94,9 @@ export default function MorePage() {
               <TrendingUp className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
               <span className="text-slate-900 dark:text-white font-medium">Transactions</span>
             </button>
-            
-            <Link
-              href="/config"
-              className="flex items-center space-x-3 p-4 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-            >
-              <Settings className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-              <span className="text-slate-900 dark:text-white font-medium">Settings</span>
-            </Link>
-            
+
+
+
             <button
               onClick={handleLogout}
               className="w-full flex items-center space-x-3 p-4 bg-white dark:bg-slate-800 rounded-lg border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"

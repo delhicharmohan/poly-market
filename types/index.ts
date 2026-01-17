@@ -14,6 +14,7 @@ export interface Market {
   resolution_timestamp?: string | number;
   source_of_truth?: string;
   confidence_score?: string;
+  image?: string;
   odds?: {
     yes: number;
     no: number;

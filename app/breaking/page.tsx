@@ -7,6 +7,8 @@ import BottomNav from "@/components/BottomNav";
 import { api } from "@/lib/api";
 import { Market, MarketCategory } from "@/types";
 
+import ActivityTicker from "@/components/ActivityTicker";
+
 export default function BreakingPage() {
   const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState<MarketCategory | null>(null);
@@ -57,6 +59,7 @@ export default function BreakingPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 pb-20">
+      <ActivityTicker />
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8">
         {/* Breaking News Header Card */}
         <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 dark:from-indigo-700 dark:to-indigo-900 rounded-lg p-4 sm:p-6 mb-4 sm:mb-6 shadow-lg border border-indigo-500/20">
@@ -84,19 +87,18 @@ export default function BreakingPage() {
         <div className="mb-4 sm:mb-6 overflow-x-auto scrollbar-hide">
           <div className="flex gap-2 sm:gap-3 pb-1">
             {categories.map((category) => {
-              const isSelected = category === "All" 
-                ? selectedCategory === null 
+              const isSelected = category === "All"
+                ? selectedCategory === null
                 : selectedCategory === category;
-              
+
               return (
                 <button
                   key={category}
                   onClick={() => setSelectedCategory(category === "All" ? null : category as MarketCategory)}
-                  className={`px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg whitespace-nowrap transition-all duration-200 touch-manipulation ${
-                    isSelected
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg whitespace-nowrap transition-all duration-200 touch-manipulation ${isSelected
                       ? "bg-indigo-600 text-white shadow-sm"
                       : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
-                  }`}
+                    }`}
                 >
                   {category}
                 </button>
@@ -125,7 +127,7 @@ export default function BreakingPage() {
             {markets.slice(0, 20).map((market, index) => {
               const percentage = calculatePercentage(market);
               const change = calculateChange(market);
-              
+
               return (
                 <button
                   key={market.id}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Market, WagerRequest, MarketCategory, MarketTerm } from "@/types";
 import MarketCard from "@/components/MarketCard";
@@ -9,13 +9,13 @@ import FilterBar from "@/components/FilterBar";
 import MarketsByCategory from "@/components/MarketsByCategory";
 import IndimarketLogo from "@/components/IndimarketLogo";
 import SearchBar from "@/components/SearchBar";
+import ActivityTicker from "@/components/ActivityTicker";
 import CategoryNav from "@/components/CategoryNav";
 import BottomNav from "@/components/BottomNav";
 import { useAuth } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Filter, User } from "lucide-react";
-import { useEffect, useState } from "react";
 
 export default function Home() {
   const router = useRouter();
@@ -55,49 +55,9 @@ export default function Home() {
 
   // API key is now managed server-side, so we always try to fetch markets
   useEffect(() => {
-    // Load API endpoint from localStorage if available
-    if (typeof window !== "undefined") {
-      const storedEndpoint = localStorage.getItem("indimarket_api_endpoint");
-      if (storedEndpoint) {
-        api.setApiEndpoint(storedEndpoint);
-      }
-    }
-    
-    // API key is managed server-side, always fetch markets
-    fetchMarkets();
-
-    // Listen for custom event when endpoint is updated in config page
-    const handleApiKeyUpdated = () => {
-      // Reload endpoint from localStorage
-      if (typeof window !== "undefined") {
-        const storedEndpoint = localStorage.getItem("indimarket_api_endpoint");
-        if (storedEndpoint) {
-          api.setApiEndpoint(storedEndpoint);
-        }
-      }
-      fetchMarkets();
-    };
-
-    // Listen for storage changes (when endpoint is saved in another tab/page)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "indimarket_api_endpoint") {
-        handleApiKeyUpdated();
-      }
-    };
-
-    window.addEventListener("apiKeyUpdated", handleApiKeyUpdated as EventListener);
-    window.addEventListener("storage", handleStorageChange);
-
-    return () => {
-      window.removeEventListener("apiKeyUpdated", handleApiKeyUpdated as EventListener);
-      window.removeEventListener("storage", handleStorageChange);
-    };
-  }, [fetchMarkets]);
-
-  // Refetch markets when filters change
-  useEffect(() => {
     fetchMarkets();
   }, [fetchMarkets]);
+
 
   // Filter markets based on search query
   const filteredMarkets = useMemo(() => {
@@ -161,39 +121,40 @@ export default function Home() {
         </div>
       </header>
 
+      <ActivityTicker />
+
       <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8 pb-20 sm:pb-8">
         <CategoryNav
           selectedCategory={selectedCategory}
           onCategoryChange={setSelectedCategory}
         />
-            <div className="mb-4 animate-fadeInUp">
-              <div className="flex items-center gap-3">
-              <div className="flex-1">
-                <SearchBar value={searchQuery} onChange={setSearchQuery} />
-              </div>
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center justify-center w-12 h-12 sm:w-auto sm:h-auto sm:px-4 sm:py-3 text-sm font-medium rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 shadow-sm hover:shadow-md touch-manipulation ${
-                  showFilters
-                    ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                    : "text-slate-300 dark:text-slate-300 bg-slate-700 dark:bg-slate-800 hover:bg-slate-600 dark:hover:bg-slate-700 border border-slate-600 dark:border-slate-700"
+        <div className="mb-4 animate-fadeInUp">
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <SearchBar value={searchQuery} onChange={setSearchQuery} />
+            </div>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`flex items-center justify-center w-12 h-12 sm:w-auto sm:h-auto sm:px-4 sm:py-3 text-sm font-medium rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 shadow-sm hover:shadow-md touch-manipulation ${showFilters
+                ? "bg-indigo-600 text-white hover:bg-indigo-700"
+                : "text-slate-300 dark:text-slate-300 bg-slate-700 dark:bg-slate-800 hover:bg-slate-600 dark:hover:bg-slate-700 border border-slate-600 dark:border-slate-700"
                 }`}
-              >
-                <Filter className="h-5 w-5 sm:h-5 sm:w-5" />
-                <span className="hidden sm:inline ml-2">Filter</span>
-              </button>
+            >
+              <Filter className="h-5 w-5 sm:h-5 sm:w-5" />
+              <span className="hidden sm:inline ml-2">Filter</span>
+            </button>
+          </div>
+          {showFilters && (
+            <div className="mt-4 animate-fadeInUp">
+              <FilterBar
+                selectedCategory={selectedCategory}
+                selectedTerm={selectedTerm}
+                onCategoryChange={setSelectedCategory}
+                onTermChange={setSelectedTerm}
+              />
             </div>
-            {showFilters && (
-              <div className="mt-4 animate-fadeInUp">
-                <FilterBar
-                  selectedCategory={selectedCategory}
-                  selectedTerm={selectedTerm}
-                  onCategoryChange={setSelectedCategory}
-                  onTermChange={setSelectedTerm}
-                />
-              </div>
-            )}
-            </div>
+          )}
+        </div>
 
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 animate-fadeIn">
@@ -219,7 +180,7 @@ export default function Home() {
         ) : filteredMarkets.length === 0 ? (
           <div className="text-center py-20">
             <p className="text-slate-600 dark:text-slate-400 text-lg">
-              {searchQuery 
+              {searchQuery
                 ? `No markets found matching "${searchQuery}"`
                 : `No markets available ${selectedCategory || selectedTerm ? "for the selected filters" : "at the moment"}.`
               }

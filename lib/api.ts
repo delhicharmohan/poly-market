@@ -2,61 +2,21 @@ import axios, { AxiosError } from "axios";
 import { Market, WagerRequest, WagerResponse, MarketCategory, MarketTerm } from "@/types";
 
 class IndimarketAPI {
-  private apiEndpoint: string | null = null;
-  private apiKey: string | null = null;
-
-  constructor() {
-    // Load config from localStorage on initialization
-    if (typeof window !== "undefined") {
-      this.apiEndpoint = localStorage.getItem("indimarket_api_endpoint");
-      this.apiKey = localStorage.getItem("indimarket_api_key");
-    }
-  }
-
-  setApiKey(key: string) {
-    this.apiKey = key;
-    if (typeof window !== "undefined") {
-      localStorage.setItem("indimarket_api_key", key);
-    }
-  }
-
-  getApiKey(): string | null {
-    return this.apiKey;
-  }
-
-  setApiEndpoint(endpoint: string) {
-    this.apiEndpoint = endpoint;
-    if (typeof window !== "undefined") {
-      localStorage.setItem("indimarket_api_endpoint", endpoint);
-    }
-  }
-
-  getApiEndpoint(): string | null {
-    return this.apiEndpoint;
-  }
-
   private getHeaders() {
-    const headers: Record<string, string> = {
+    return {
       "Content-Type": "application/json",
     };
-
-    // API key is no longer sent from client - it's managed server-side
-    return headers;
   }
 
   async getMarkets(category?: MarketCategory, term?: MarketTerm): Promise<Market[]> {
     try {
       const headers = this.getHeaders();
-      const endpoint = this.apiEndpoint || "";
       const params: Record<string, string> = {};
       if (category) params.category = category;
       if (term) params.term = term;
 
       const response = await axios.get<Market[]>("/api/markets", {
-        headers: {
-          ...headers,
-          ...(endpoint ? { "X-API-Endpoint": endpoint } : {}),
-        },
+        headers,
         params,
       });
       return response.data;
@@ -75,12 +35,8 @@ class IndimarketAPI {
   async placeWager(wager: WagerRequest): Promise<WagerResponse> {
     try {
       const headers = this.getHeaders();
-      const endpoint = this.apiEndpoint || "";
       const response = await axios.post<WagerResponse>("/api/wager", wager, {
-        headers: {
-          ...headers,
-          ...(endpoint ? { "X-API-Endpoint": endpoint } : {}),
-        },
+        headers,
       });
       return response.data;
     } catch (error) {

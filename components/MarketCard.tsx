@@ -33,7 +33,7 @@ function formatCountdown(timeRemaining: number): string {
 }
 
 export default function MarketCard({ market, onPlaceWager }: MarketCardProps) {
-  const isOpen = market.status === "OPEN";
+  const isOpen = market.status?.toUpperCase() === "OPEN";
   // Handle both string and number timestamps
   const closureTimestamp = typeof market.closure_timestamp === "string"
     ? parseInt(market.closure_timestamp)
@@ -90,11 +90,14 @@ export default function MarketCard({ market, onPlaceWager }: MarketCardProps) {
                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
               />
             </div>
-            {/* Live Indicator on Thumbnail */}
+            {/* Live Badge on Thumbnail */}
             {isOpen && (
-              <div className="absolute -top-1.5 -right-1.5 flex h-4 w-4">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-4 w-4 bg-red-600 border-2 border-white dark:border-slate-800"></span>
+              <div className="absolute top-1 right-1 flex items-center space-x-1 px-1.5 py-0.5 bg-red-600 rounded shadow-lg z-20">
+                <span className="flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-white opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
+                </span>
+                <span className="text-[8px] font-bold text-white uppercase tracking-tighter">LIVE</span>
               </div>
             )}
           </div>
