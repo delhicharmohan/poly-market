@@ -13,7 +13,7 @@ function verifyWebhookSignature(
       .createHmac("sha256", secret)
       .update(body)
       .digest("hex");
-    
+
     // Use constant-time comparison to prevent timing attacks
     return crypto.timingSafeEqual(
       Buffer.from(signature),
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
 
     // Read raw body for signature verification
     const rawBody = await request.text();
-    
+
     // Verify webhook signature using the API key from env as the secret
     if (signature) {
       const isValid = verifyWebhookSignature(rawBody, signature, apiKey);
@@ -58,10 +58,10 @@ export async function POST(request: NextRequest) {
 
     // Parse the webhook payload
     const payload = JSON.parse(rawBody);
-    const { 
-      event, 
-      marketId, 
-      marketStatus, 
+    const {
+      event,
+      marketId,
+      marketStatus,
       outcome, // 'yes' or 'no' - the winning outcome
       timestamp,
       marketTitle // Optional: market title if provided
@@ -188,9 +188,20 @@ export async function POST(request: NextRequest) {
       );
 
       for (const wager of winningWagers.rows) {
+        // IDEMPOTENCY CHECK: Check if this wager has already been credited
+        const existingWinResult = await pool.query(
+          "SELECT id FROM wallet_transactions WHERE wager_id = $1 AND type = 'win'",
+          [wager.id]
+        );
+
+        if (existingWinResult.rows.length > 0) {
+          console.log(`Wager ${wager.id} already has a win transaction credited. Skipping.`);
+          continue;
+        }
+
         // Use potential_win as the payout (already calculated when wager was placed)
         const payout = parseFloat(wager.potential_win);
-        
+
         // Update wager with actual payout
         await pool.query(
           `UPDATE wagers 
@@ -198,7 +209,7 @@ export async function POST(request: NextRequest) {
            WHERE id = $2`,
           [payout, wager.id]
         );
-        
+
         // Get current balance
         const balanceResult = await pool.query(
           `SELECT COALESCE(SUM(amount), 0) as balance
@@ -210,6 +221,8 @@ export async function POST(request: NextRequest) {
         const newBalance = currentBalance + payout;
 
         // Create wallet transaction for winnings
+        // IMPORTANT: No automated withdrawal or payout occurs here. 
+        // Winnings are simply credited to the internal user balance.
         await pool.query(
           `INSERT INTO wallet_transactions (user_id, type, amount, balance_after, description, wager_id)
            VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -222,6 +235,7 @@ export async function POST(request: NextRequest) {
             wager.id,
           ]
         );
+        console.log(`Successfully credited $${payout.toFixed(2)} to user ${wager.user_id} for winning wager ${wager.id}`);
       }
 
       // Commit transaction

@@ -59,13 +59,13 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
 
   // Format closure date
   const closureDate = new Date(
-    typeof market.closure_timestamp === "string" 
-      ? parseInt(market.closure_timestamp) 
+    typeof market.closure_timestamp === "string"
+      ? parseInt(market.closure_timestamp)
       : market.closure_timestamp
   );
-  const formattedDate = closureDate.toLocaleDateString("en-US", { 
-    month: "long", 
-    day: "numeric" 
+  const formattedDate = closureDate.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric"
   });
 
   const handleIncrement = (amount: number) => {
@@ -109,34 +109,17 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
         selection,
         stake: stakeAmount,
       });
-      
-            // Deduct from wallet on successful wager
-            try {
-              const withdrawSuccess = await wallet.withdraw(stakeAmount);
-              if (!withdrawSuccess) {
-                setError("Failed to deduct from wallet. Please try again.");
-                return;
-              }
-              const newBalance = await wallet.getBalance(true);
-              setBalance(newBalance);
-            } catch (error: any) {
-              // Handle insufficient balance error from server
-              if (error?.message?.includes("Insufficient balance") || error?.response?.data?.message?.includes("Insufficient balance")) {
-                const currentBalance = await wallet.getBalance(true);
-                setBalance(currentBalance);
-                setError(`Insufficient balance. You have $${currentBalance.toFixed(2)} available.`);
-                return;
-              }
-              setError(error?.message || "Failed to deduct from wallet. Please try again.");
-              return;
-            }
-      
+
+      // Refresh balance after successful wager (deduction happens on server)
+      const newBalance = await wallet.getBalance(true);
+      setBalance(newBalance);
+
       // Save transaction (get user email if available)
-      const userEmail = typeof window !== "undefined" 
-        ? sessionStorage.getItem("user_email") || undefined 
+      const userEmail = typeof window !== "undefined"
+        ? sessionStorage.getItem("user_email") || undefined
         : undefined;
       await transactions.addTransaction(result, market, userEmail);
-      
+
       setWagerResult(result);
       setSuccess(true);
     } catch (err) {

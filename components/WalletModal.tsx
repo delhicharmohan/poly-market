@@ -30,7 +30,7 @@ export default function WalletModal({ onClose }: WalletModalProps) {
     setError(null);
     setSuccess(null);
     const depositAmount = parseFloat(amount);
-    
+
     if (isNaN(depositAmount) || depositAmount <= 0) {
       setError("Please enter a valid amount");
       return;
@@ -41,10 +41,7 @@ export default function WalletModal({ onClose }: WalletModalProps) {
       setSuccess(`Successfully deposited $${depositAmount.toFixed(2)}`);
       setAmount("");
       await refreshBalance();
-      
-      // Trigger confetti celebration
-      triggerConfetti();
-      
+
       // Close modal and return to home after celebration
       setTimeout(() => {
         setShowDeposit(false);
@@ -60,7 +57,7 @@ export default function WalletModal({ onClose }: WalletModalProps) {
     setError(null);
     setSuccess(null);
     const withdrawAmount = parseFloat(amount);
-    
+
     if (isNaN(withdrawAmount) || withdrawAmount <= 0) {
       setError("Please enter a valid amount");
       return;
@@ -138,38 +135,30 @@ export default function WalletModal({ onClose }: WalletModalProps) {
                 setAmount("");
               }}
               disabled={balance === 0}
-              className={`flex flex-col items-center justify-center p-4 border-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 ${
-                balance === 0
-                  ? "bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 cursor-not-allowed opacity-50"
-                  : "bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-900/30 hover:border-rose-300 dark:hover:border-rose-700"
-              }`}
+              className={`flex flex-col items-center justify-center p-4 border-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 ${balance === 0
+                ? "bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 cursor-not-allowed opacity-50"
+                : "bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-900/30 hover:border-rose-300 dark:hover:border-rose-700"
+                }`}
             >
-              <ArrowUpCircle className={`h-8 w-8 mb-2 ${
-                balance === 0
-                  ? "text-gray-400 dark:text-gray-600"
-                  : "text-rose-600 dark:text-rose-400"
-              }`} />
-              <span className={`font-semibold ${
-                balance === 0
-                  ? "text-gray-500 dark:text-gray-500"
-                  : "text-rose-700 dark:text-rose-300"
-              }`}>Withdraw</span>
+              <ArrowUpCircle className={`h-8 w-8 mb-2 ${balance === 0
+                ? "text-gray-400 dark:text-gray-600"
+                : "text-rose-600 dark:text-rose-400"
+                }`} />
+              <span className={`font-semibold ${balance === 0
+                ? "text-gray-500 dark:text-gray-500"
+                : "text-rose-700 dark:text-rose-300"
+                }`}>Withdraw</span>
             </button>
           </div>
         )}
 
         {/* Deposit Form */}
-        {showDeposit && (
+        {showDeposit && !success && (
           <div className="space-y-4 animate-fadeIn">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Deposit Funds</h3>
             {error && (
               <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
                 <span className="text-sm text-red-600 dark:text-red-400">{error}</span>
-              </div>
-            )}
-            {success && (
-              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
-                <span className="text-sm text-green-600 dark:text-green-400">{success}</span>
               </div>
             )}
             <div>
@@ -196,7 +185,6 @@ export default function WalletModal({ onClose }: WalletModalProps) {
                   setShowDeposit(false);
                   setAmount("");
                   setError(null);
-                  setSuccess(null);
                 }}
                 className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
               >
@@ -208,6 +196,22 @@ export default function WalletModal({ onClose }: WalletModalProps) {
               >
                 Deposit
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Success State for Deposit */}
+        {showDeposit && success && (
+          <div className="py-8 text-center animate-fadeIn">
+            <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mx-auto mb-6 animate-bounce">
+              <ArrowDownCircle className="h-10 w-10 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2 italic uppercase tracking-tighter">Funds Added!</h3>
+            <p className="text-slate-500 dark:text-slate-400 mb-6 font-medium">
+              Your account has been successfully funded.
+            </p>
+            <div className="text-3xl font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
+              {success.split('$')[1] ? `+$${success.split('$')[1]}` : success}
             </div>
           </div>
         )}

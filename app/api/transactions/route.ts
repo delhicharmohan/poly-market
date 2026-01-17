@@ -12,10 +12,7 @@ export async function GET(request: NextRequest) {
   try {
     const userId = getUserId(request);
     if (!userId) {
-      return NextResponse.json(
-        { message: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
     const pool = getPool();
@@ -32,104 +29,66 @@ export async function GET(request: NextRequest) {
 
     const userId_db = userResult.rows[0].id;
 
-    // Fetch wagers
-    const wagersResult = await pool.query(
-      `SELECT 
-        w.id,
-        w.wager_id as "wagerId",
-        w.market_id as "marketId",
-        m.title as "marketTitle",
-        w.selection,
-        w.stake,
-        w.odds_yes as "oddsYes",
-        w.odds_no as "oddsNo",
-        w.potential_win as "potentialWin",
-        w.actual_payout as "payout",
-        w.status,
-        w.market_status as "marketStatus",
-        EXTRACT(EPOCH FROM w.created_at) * 1000 as timestamp
-      FROM wagers w
-      LEFT JOIN markets m ON w.market_id = m.id
-      WHERE w.user_id = $1
-      ORDER BY w.created_at DESC
-      LIMIT 100`,
-      [userId_db]
-    );
-
-    // Fetch wallet transactions (deposits, withdrawals, wins)
-    const walletResult = await pool.query(
+    /**
+     * UNIFIED TRANSACTION QUERY
+     * We fetch from wallet_transactions as the source of truth for balance movements,
+     * and JOIN with wagers and markets to get context if they are wager-related.
+     */
+    const result = await pool.query(
       `SELECT 
         wt.id,
         wt.type,
         wt.amount,
         wt.balance_after as "balanceAfter",
         wt.description,
-        wt.wager_id as "wagerId",
-        EXTRACT(EPOCH FROM wt.created_at) * 1000 as timestamp
+        wt.wager_id as "wagerIdDb",
+        EXTRACT(EPOCH FROM wt.created_at) * 1000 as timestamp,
+        w.wager_id as "wagerId",
+        w.market_id as "marketId",
+        w.selection,
+        w.stake,
+        w.odds_yes as "oddsYes",
+        w.odds_no as "oddsNo",
+        w.potential_win as "potentialWin",
+        w.status as "wagerStatus",
+        w.market_status as "marketStatus",
+        m.title as "marketTitle"
       FROM wallet_transactions wt
+      LEFT JOIN wagers w ON wt.wager_id = w.id
+      LEFT JOIN markets m ON w.market_id = m.id
       WHERE wt.user_id = $1
       ORDER BY wt.created_at DESC
       LIMIT 100`,
       [userId_db]
     );
 
-    // Map wagers to transactions
-    const wagerTransactions = wagersResult.rows.map((row) => ({
-      id: row.id,
-      type: "wager" as const,
-      wagerId: row.wagerId,
-      marketId: row.marketId,
-      marketTitle: row.marketTitle || "Unknown Market",
-      selection: row.selection as "yes" | "no",
-      stake: parseFloat(row.stake),
-      amount: -parseFloat(row.stake), // Negative for wager
-      odds: {
-        yes: parseFloat(row.oddsYes),
-        no: parseFloat(row.oddsNo),
-      },
-      potentialWin: parseFloat(row.potentialWin),
-      payout: row.payout !== null ? parseFloat(row.payout) : undefined,
-      status: row.status,
-      timestamp: parseInt(row.timestamp),
-      marketStatus: row.marketStatus,
-    }));
+    const transactions = result.rows.map((row) => {
+      const isWagerRelated = row.type === 'wager' || row.type === 'win' || (row.type === 'withdraw' && row.wagerIdDb);
 
-    // Map wallet transactions
-    const walletTransactions = walletResult.rows.map((row) => {
-      const baseTx = {
+      return {
         id: row.id,
-        type: row.type as "deposit" | "withdraw" | "win",
+        type: row.type,
         amount: parseFloat(row.amount),
         balanceAfter: parseFloat(row.balanceAfter),
         description: row.description,
         timestamp: parseInt(row.timestamp),
+        wagerId: row.wagerId,
+        marketId: row.marketId,
+        marketTitle: row.marketTitle || (row.type === 'win' ? "Winnings" : (row.type === 'withdraw' ? "Withdrawal" : "Deposit")),
+        selection: row.selection,
+        stake: row.stake ? parseFloat(row.stake) : undefined,
+        odds: row.oddsYes ? {
+          yes: parseFloat(row.oddsYes),
+          no: parseFloat(row.oddsNo),
+        } : undefined,
+        potentialWin: row.potentialWin ? parseFloat(row.potentialWin) : undefined,
+        payout: row.type === 'win' ? parseFloat(row.amount) : (row.wagerStatus === 'WON' ? row.potentialWin : undefined),
+        status: row.wagerStatus || 'COMPLETED',
+        marketStatus: row.marketStatus || 'OPEN',
       };
-
-      // For win transactions, try to get wager details if wager_id exists
-      if (row.type === "win" && row.wagerId) {
-        const wager = wagersResult.rows.find((w) => w.id === row.wagerId);
-        if (wager) {
-          return {
-            ...baseTx,
-            wagerId: wager.wagerId,
-            marketId: wager.marketId,
-            marketTitle: wager.marketTitle || "Unknown Market",
-            payout: parseFloat(row.amount), // Win amount is the payout
-            marketStatus: wager.marketStatus,
-            status: "WON",
-          };
-        }
-      }
-
-      return baseTx;
     });
 
-    // Combine and sort by timestamp (most recent first)
-    const allTransactions = [...wagerTransactions, ...walletTransactions].sort(
-      (a, b) => b.timestamp - a.timestamp
-    );
-
-    return NextResponse.json({ transactions: allTransactions });
+    return NextResponse.json({ transactions });
   } catch (error: any) {
     console.error("Error fetching transactions:", error);
     return NextResponse.json(
@@ -207,7 +166,9 @@ export async function POST(request: NextRequest) {
         wager_id, user_id, market_id, selection, stake,
         odds_yes, odds_no, potential_win, status, market_status
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      ON CONFLICT (wager_id) DO NOTHING
+      ON CONFLICT (wager_id) DO UPDATE SET
+        status = EXCLUDED.status,
+        market_status = EXCLUDED.market_status
       RETURNING id, created_at`,
       [
         wagerId,
@@ -223,22 +184,26 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    // Create wallet transaction
-    await pool.query(
-      `INSERT INTO wallet_transactions (user_id, type, amount, balance_after, description, wager_id)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        userId_db,
-        "wager",
-        -stake, // Negative for withdrawal
-        0, // balance_after (would need to calculate from wallet)
-        `Wager placed on ${marketTitle}`,
-        wagerResult.rows[0]?.id || null,
-      ]
-    );
+    const dbWagerId = wagerResult.rows[0]?.id;
+
+    if (dbWagerId) {
+      // LINK RESERVATION: Update the most recent unlinked withdrawal for this user
+      // to point to this wager. This prevents double-counting in the unified view.
+      await pool.query(
+        `UPDATE wallet_transactions 
+         SET wager_id = $1 
+         WHERE id = (
+           SELECT id FROM wallet_transactions 
+           WHERE user_id = $2 AND type = 'withdraw' AND wager_id IS NULL
+           ORDER BY created_at DESC 
+           LIMIT 1
+         )`,
+        [dbWagerId, userId_db]
+      );
+    }
 
     return NextResponse.json(
-      { success: true, id: wagerResult.rows[0]?.id },
+      { success: true, id: dbWagerId },
       { status: 201 }
     );
   } catch (error: any) {

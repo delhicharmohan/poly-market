@@ -1,45 +1,90 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { User, TrendingUp } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
+import { TrendingUp, Newspaper, Zap, Trophy } from "lucide-react";
 
-const SIMULATED_ACTIVITIES = [
-    { user: "AlexG", action: "placed $250 on YES", category: "Politics" },
-    { user: "CryptoWhale", action: "wagered $1,200 on NO", category: "Crypto" },
-    { user: "SarahM", action: "placed $50 on YES", category: "NFL" },
-    { user: "TradeMaster", action: "wagered $500 on YES", category: "Finance" },
-    { user: "CricketFan", action: "placed $100 on NO", category: "Cricket" },
-    { user: "ElectionExpert", action: "wagered $2,500 on YES", category: "Election" },
-    { user: "Baller23", action: "placed $150 on YES", category: "NBA" },
-    { user: "InsightfulOne", action: "placed $300 on NO", category: "World" },
-];
+interface Activity {
+    type: string;
+    text: string;
+    timestamp: number;
+}
 
 export default function ActivityTicker() {
-    const [index, setIndex] = useState(0);
+    const [activities, setActivities] = useState<Activity[]>([]);
 
     useEffect(() => {
-        const interval = setInterval(() => {
-            setIndex((prev) => (prev + 1) % SIMULATED_ACTIVITIES.length);
-        }, 4000);
+        const fetchActivity = async () => {
+            try {
+                const res = await fetch('/api/activity');
+                const data = await res.json();
+                if (data.activities && data.activities.length > 0) {
+                    setActivities(data.activities);
+                }
+            } catch (e) {
+                console.error("Ticker fetch error:", e);
+            }
+        };
+
+        fetchActivity();
+        const interval = setInterval(fetchActivity, 60000); // Refresh every minute
         return () => clearInterval(interval);
     }, []);
 
-    const current = SIMULATED_ACTIVITIES[index];
+    // Fallback data if DB is empty or still loading
+    const displayData = activities.length > 0 ? activities : [
+        { type: "TRADE", text: "Welcome to Indimarket! Start trading now." },
+        { type: "NEWS", text: "New markets added daily. Check the latest NFL odds." },
+    ];
+
+    const doubledData = useMemo(() => [...displayData, ...displayData], [displayData]);
 
     return (
-        <div className="bg-indigo-600/10 border-y border-indigo-500/20 py-2 overflow-hidden relative">
-            <div className="max-w-7xl mx-auto px-4 flex items-center justify-center sm:justify-start">
-                <div className="flex items-center space-x-2 animate-fadeIn">
-                    <TrendingUp className="h-3 w-3 text-indigo-500 animate-pulse" />
-                    <span className="text-[10px] sm:text-xs font-semibold text-indigo-500 uppercase tracking-widest">LIVE ACTIVITY</span>
-                    <span className="h-3 w-[1px] bg-indigo-500/30 mx-2 hidden sm:block"></span>
-                    <div className="flex items-center space-x-2 text-slate-600 dark:text-slate-400 text-xs truncate">
-                        <span className="font-bold text-slate-900 dark:text-white">{current.user}</span>
-                        <span>{current.action}</span>
-                        <span className="hidden sm:inline text-[10px] bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-500">{current.category}</span>
+        <div className="bg-slate-900 border-y border-slate-800 py-2.5 overflow-hidden relative group">
+            <div className="flex items-center">
+                {/* Fixed Label */}
+                <div className="absolute left-0 top-0 bottom-0 px-4 bg-slate-900 z-10 flex items-center shadow-[10px_0_20px_rgba(15,23,42,0.9)] border-r border-slate-800">
+                    <div className="flex items-center space-x-2">
+                        <div className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                        </div>
+                        <span className="text-[10px] font-black tracking-[0.2em] text-white uppercase italic">Live Feed</span>
                     </div>
                 </div>
+
+                {/* Scrolling Track */}
+                <div className="flex animate-marquee whitespace-nowrap pl-[120px]">
+                    {doubledData.map((item, idx) => (
+                        <div key={idx} className="flex items-center mx-8 group/item">
+                            {item.type === "TRADE" && <Zap className="h-3 w-3 text-indigo-400 mr-2 opacity-50" />}
+                            {item.type === "WIN" && <Trophy className="h-3 w-3 text-emerald-400 mr-2 opacity-50" />}
+                            {item.type === "NEWS" && <Newspaper className="h-3 w-3 text-amber-400 mr-2 opacity-50" />}
+
+                            <span className={`text-[11px] font-bold uppercase tracking-tight mr-2 ${item.type === "WIN" ? "text-emerald-500" : "text-slate-500"
+                                }`}>
+                                {item.type}
+                            </span>
+                            <span className="text-xs font-medium text-slate-300 group-hover/item:text-white transition-colors">
+                                {item.text}
+                            </span>
+                            <span className="mx-8 text-slate-800">•</span>
+                        </div>
+                    ))}
+                </div>
             </div>
+
+            <style jsx global>{`
+                @keyframes marquee {
+                    0% { transform: translateX(0); }
+                    100% { transform: translateX(-50%); }
+                }
+                .animate-marquee {
+                    animation: marquee 60s linear infinite;
+                }
+                .animate-marquee:hover {
+                    animation-play-state: paused;
+                }
+            `}</style>
         </div>
     );
 }

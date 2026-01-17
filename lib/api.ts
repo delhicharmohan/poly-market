@@ -3,8 +3,14 @@ import { Market, WagerRequest, WagerResponse, MarketCategory, MarketTerm } from 
 
 class IndimarketAPI {
   private getHeaders() {
+    let userId = null;
+    if (typeof window !== "undefined") {
+      userId = sessionStorage.getItem("firebase_uid");
+    }
+
     return {
       "Content-Type": "application/json",
+      ...(userId ? { "X-User-ID": userId } : {}),
     };
   }
 

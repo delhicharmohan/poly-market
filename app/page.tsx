@@ -12,6 +12,8 @@ import SearchBar from "@/components/SearchBar";
 import ActivityTicker from "@/components/ActivityTicker";
 import CategoryNav from "@/components/CategoryNav";
 import BottomNav from "@/components/BottomNav";
+import MarketStats from "@/components/MarketStats";
+import LiveTradeAlert from "@/components/LiveTradeAlert";
 import { useAuth } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -124,6 +126,8 @@ export default function Home() {
       <ActivityTicker />
 
       <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8 pb-20 sm:pb-8">
+        <MarketStats />
+
         <CategoryNav
           selectedCategory={selectedCategory}
           onCategoryChange={setSelectedCategory}
@@ -206,6 +210,7 @@ export default function Home() {
 
 
 
+      <LiveTradeAlert />
       <BottomNav />
     </div>
   );

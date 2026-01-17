@@ -110,17 +110,7 @@ export default function MarketCard({ market, onPlaceWager }: MarketCardProps) {
           </div>
         </div>
 
-        {/* Pool Visualization */}
-        <div className="mb-4">
-          <div className="flex justify-between text-[10px] font-bold mb-1 uppercase tracking-tight">
-            <span className="text-green-600 dark:text-green-400">Yes {yesPercent.toFixed(0)}%</span>
-            <span className="text-red-600 dark:text-red-400">No {noPercent.toFixed(0)}%</span>
-          </div>
-          <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden flex">
-            <div className="h-full bg-green-500 transition-all duration-1000" style={{ width: `${yesPercent}%` }}></div>
-            <div className="h-full bg-red-500 transition-all duration-1000" style={{ width: `${noPercent}%` }}></div>
-          </div>
-        </div>
+
 
         {/* Odds Grid */}
         <div className="flex-grow mb-4">
