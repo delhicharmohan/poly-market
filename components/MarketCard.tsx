@@ -70,12 +70,26 @@ export default function MarketCard({ market, onPlaceWager }: MarketCardProps) {
     <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm hover:shadow-xl transition-all duration-500 border border-slate-200 dark:border-slate-700 overflow-hidden h-full flex flex-col group touch-manipulation">
       <div className="p-4 sm:p-5 flex flex-col flex-grow relative z-10">
         {/* Header with Title and Thumbnail */}
-        <div className="flex justify-between items-start gap-3 mb-4">
+        <div className="flex justify-between items-start gap-4 mb-4">
           <div className="flex-grow">
-            {/* Category Tag */}
-            <div className="inline-block px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 border border-slate-200 dark:border-slate-600">
-              {market.category}
+            <div className="flex items-center gap-2 mb-2">
+              {/* Category Tag */}
+              <div className="inline-block px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border border-slate-200 dark:border-slate-600">
+                {market.category}
+              </div>
+
+              {/* Live Badge - Moved here for clarity */}
+              {isOpen && (
+                <div className="flex items-center space-x-1 px-1.5 py-0.5 bg-red-100 dark:bg-red-900/30 rounded border border-red-200 dark:border-red-800/50">
+                  <span className="flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500"></span>
+                  </span>
+                  <span className="text-[8px] font-bold text-red-600 dark:text-red-400 uppercase tracking-tighter">LIVE</span>
+                </div>
+              )}
             </div>
+
             <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-tight line-clamp-2">
               {market.title}
             </h3>
@@ -87,19 +101,10 @@ export default function MarketCard({ market, onPlaceWager }: MarketCardProps) {
               <img
                 src={marketImage}
                 alt={market.title}
+                loading="lazy"
                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
               />
             </div>
-            {/* Live Badge on Thumbnail */}
-            {isOpen && (
-              <div className="absolute top-1 right-1 flex items-center space-x-1 px-1.5 py-0.5 bg-red-600 rounded shadow-lg z-20">
-                <span className="flex h-1.5 w-1.5">
-                  <span className="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-white opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
-                </span>
-                <span className="text-[8px] font-bold text-white uppercase tracking-tighter">LIVE</span>
-              </div>
-            )}
           </div>
         </div>
 
