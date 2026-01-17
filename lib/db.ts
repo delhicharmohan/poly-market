@@ -14,6 +14,10 @@ export function getPool(): Pool {
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000, // Increased timeout
+      // Enable SSL for production (Render)
+      ssl: process.env.DATABASE_URL && !process.env.DATABASE_URL.includes("localhost")
+        ? { rejectUnauthorized: false }
+        : false
     });
 
     // Handle pool errors
