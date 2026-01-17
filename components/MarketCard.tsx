@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { Market } from "@/types";
 import { Clock } from "lucide-react";
 
+import { getMarketImage } from "@/lib/images";
+
 interface MarketCardProps {
   market: Market;
   onPlaceWager: (selection: "yes" | "no") => void;
@@ -20,23 +22,23 @@ function formatCountdown(timeRemaining: number): string {
   const seconds = Math.floor((timeRemaining % (1000 * 60)) / 1000);
 
   if (days > 0) {
-    return `${days} ${days === 1 ? 'day' : 'days'}`;
+    return `${days}d ${hours}h`;
   } else if (hours > 0) {
-    return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+    return `${hours}h ${minutes}m`;
   } else if (minutes > 0) {
-    return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+    return `${minutes}m ${seconds}s`;
   } else {
-    return `${seconds} ${seconds === 1 ? 'second' : 'seconds'}`;
+    return `${seconds}s`;
   }
 }
 
 export default function MarketCard({ market, onPlaceWager }: MarketCardProps) {
   const isOpen = market.status === "OPEN";
   // Handle both string and number timestamps
-  const closureTimestamp = typeof market.closure_timestamp === "string" 
-    ? parseInt(market.closure_timestamp) 
-    : market.closure_timestamp;
-  
+  const closureTimestamp = typeof market.closure_timestamp === "string"
+    ? parseInt(market.closure_timestamp)
+    : market.closure_timestamp || 0;
+
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
 
   useEffect(() => {
@@ -46,88 +48,109 @@ export default function MarketCard({ market, onPlaceWager }: MarketCardProps) {
       setTimeRemaining(remaining);
     };
 
-    // Update immediately
     updateCountdown();
-
-    // Update every second
     const interval = setInterval(updateCountdown, 1000);
-
     return () => clearInterval(interval);
   }, [closureTimestamp]);
 
-  const poolYes = parseFloat(market.pool_yes);
-  const poolNo = parseFloat(market.pool_no);
-  const totalPool = parseFloat(market.total_pool);
-  
-  // Use provided odds if available, otherwise calculate implied odds
-  const oddsYes = market.odds?.yes || (totalPool / poolYes);
-  const oddsNo = market.odds?.no || (totalPool / poolNo);
+  const poolYes = parseFloat(market.pool_yes) || 0;
+  const poolNo = parseFloat(market.pool_no) || 0;
+  const totalPool = parseFloat(market.total_pool) || (poolYes + poolNo);
+
+  const oddsYes = market.odds?.yes || (totalPool > 0 ? (totalPool / (poolYes || 1)) : 2);
+  const oddsNo = market.odds?.no || (totalPool > 0 ? (totalPool / (poolNo || 1)) : 2);
+
+  const yesPercent = totalPool > 0 ? (poolYes / totalPool) * 100 : 50;
+  const noPercent = 100 - yesPercent;
+
+  const marketImage = market.image || getMarketImage(market.category);
+  const isClosingSoon = timeRemaining > 0 && timeRemaining < 24 * 60 * 60 * 1000; // Less than 24h
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm hover:shadow-md transition-all duration-300 border border-slate-200 dark:border-slate-700 overflow-hidden h-full flex flex-col group touch-manipulation">
-      <div className="p-4 sm:p-5 flex flex-col flex-grow">
-        {/* Header Section */}
-        <div className="mb-3 pb-3 border-b border-slate-200 dark:border-slate-700">
-          <h3 className="text-sm sm:text-base font-semibold text-slate-900 dark:text-white leading-snug">
-            {market.title}
-          </h3>
+    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm hover:shadow-xl transition-all duration-500 border border-slate-200 dark:border-slate-700 overflow-hidden h-full flex flex-col group touch-manipulation">
+      <div className="p-4 sm:p-5 flex flex-col flex-grow relative z-10">
+        {/* Header with Title and Thumbnail */}
+        <div className="flex justify-between items-start gap-3 mb-4">
+          <div className="flex-grow">
+            {/* Category Tag */}
+            <div className="inline-block px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 border border-slate-200 dark:border-slate-600">
+              {market.category}
+            </div>
+            <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-tight line-clamp-2">
+              {market.title}
+            </h3>
+          </div>
+
+          {/* Small Thumbnail */}
+          <div className="relative flex-shrink-0">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm">
+              <img
+                src={marketImage}
+                alt={market.title}
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+              />
+            </div>
+            {/* Live Indicator on Thumbnail */}
+            {isOpen && (
+              <div className="absolute -top-1.5 -right-1.5 flex h-4 w-4">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-4 w-4 bg-red-600 border-2 border-white dark:border-slate-800"></span>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Odds Section */}
-        <div className="flex-grow mb-3">
-          <div className="grid grid-cols-2 gap-2">
-            {/* YES Box */}
+        {/* Pool Visualization */}
+        <div className="mb-4">
+          <div className="flex justify-between text-[10px] font-bold mb-1 uppercase tracking-tight">
+            <span className="text-green-600 dark:text-green-400">Yes {yesPercent.toFixed(0)}%</span>
+            <span className="text-red-600 dark:text-red-400">No {noPercent.toFixed(0)}%</span>
+          </div>
+          <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden flex">
+            <div className="h-full bg-green-500 transition-all duration-1000" style={{ width: `${yesPercent}%` }}></div>
+            <div className="h-full bg-red-500 transition-all duration-1000" style={{ width: `${noPercent}%` }}></div>
+          </div>
+        </div>
+
+        {/* Odds Grid */}
+        <div className="flex-grow mb-4">
+          <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => isOpen && onPlaceWager("yes")}
               disabled={!isOpen}
-              className="hover-yes relative bg-white dark:bg-slate-800 rounded-lg p-2 min-h-[60px] border-2 border-green-200 dark:border-green-800 transition-all duration-200 cursor-pointer group/yes touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed disabled:border-slate-200 dark:disabled:border-slate-700"
+              className="relative overflow-hidden bg-green-50 dark:bg-green-900/20 rounded-xl p-3 border-2 border-green-200 dark:border-green-800/50 transition-all duration-300 hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:grayscale group/yes"
             >
-              <div className="flex flex-col items-center text-center justify-center h-full">
-                <div className="text-slate-500 dark:text-slate-400 text-[8px] font-medium uppercase tracking-wider mb-0.5">
-                  YES
-                </div>
-                <div className="text-slate-900 dark:text-white text-base sm:text-lg font-bold">
-                  {oddsYes.toFixed(2)}<span className="text-[10px] text-slate-500 dark:text-slate-400">x</span>
-                </div>
+              <div className="flex flex-col items-center justify-center">
+                <span className="text-[10px] font-bold text-green-600 dark:text-green-400 mb-1">BUY YES</span>
+                <span className="text-lg font-black text-slate-900 dark:text-white">
+                  {oddsYes.toFixed(2)}<span className="text-xs ml-0.5">x</span>
+                </span>
               </div>
             </button>
 
-            {/* NO Box */}
             <button
               onClick={() => isOpen && onPlaceWager("no")}
               disabled={!isOpen}
-              className="hover-no relative bg-white dark:bg-slate-800 rounded-lg p-2 min-h-[60px] border-2 border-red-200 dark:border-red-800 transition-all duration-200 cursor-pointer group/no touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed disabled:border-slate-200 dark:disabled:border-slate-700"
+              className="relative overflow-hidden bg-red-50 dark:bg-red-900/20 rounded-xl p-3 border-2 border-red-200 dark:border-red-800/50 transition-all duration-300 hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:grayscale group/no"
             >
-              <div className="flex flex-col items-center text-center justify-center h-full">
-                <div className="text-slate-500 dark:text-slate-400 text-[8px] font-medium uppercase tracking-wider mb-0.5">
-                  NO
-                </div>
-                <div className="text-slate-900 dark:text-white text-base sm:text-lg font-bold">
-                  {oddsNo.toFixed(2)}<span className="text-[10px] text-slate-500 dark:text-slate-400">x</span>
-                </div>
+              <div className="flex flex-col items-center justify-center">
+                <span className="text-[10px] font-bold text-red-600 dark:text-red-400 mb-1">BUY NO</span>
+                <span className="text-lg font-black text-slate-900 dark:text-white">
+                  {oddsNo.toFixed(2)}<span className="text-xs ml-0.5">x</span>
+                </span>
               </div>
             </button>
           </div>
         </div>
 
-        {/* Footer Section */}
-        <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
-          <div className="flex flex-row items-center justify-between gap-2">
-            <div className="flex items-center text-xs text-slate-500 dark:text-slate-400">
-              <span className="font-medium">Volume: ${totalPool.toFixed(2)}</span>
-            </div>
-            <div className="flex items-center text-xs text-slate-500 dark:text-slate-400">
-              <Clock className="h-3 w-3 mr-1" />
-              <span className="font-medium">
-                {timeRemaining > 0 ? (
-                  <span>
-                    <span className="text-indigo-600 dark:text-indigo-400 font-semibold">{formatCountdown(timeRemaining)}</span>
-                  </span>
-                ) : (
-                  <span>Closed</span>
-                )}
-              </span>
-            </div>
+        {/* Bottom Metadata */}
+        <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wide">
+          <div className="flex items-center bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">
+            <span>Vol: ${totalPool.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+          </div>
+          <div className={`flex items-center px-2 py-1 rounded ${isClosingSoon ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400' : 'bg-slate-100 dark:bg-slate-700'}`}>
+            <Clock className={`h-3 w-3 mr-1 ${isClosingSoon ? 'animate-pulse' : ''}`} />
+            <span>{timeRemaining > 0 ? formatCountdown(timeRemaining) : 'Closed'}</span>
           </div>
         </div>
       </div>
