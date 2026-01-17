@@ -85,12 +85,15 @@ END;
 $$ language 'plpgsql';
 
 -- Add triggers for updated_at
+DROP TRIGGER IF EXISTS update_users_updated_at ON users;
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_markets_updated_at ON markets;
 CREATE TRIGGER update_markets_updated_at BEFORE UPDATE ON markets
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_wagers_updated_at ON wagers;
 CREATE TRIGGER update_wagers_updated_at BEFORE UPDATE ON wagers
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
