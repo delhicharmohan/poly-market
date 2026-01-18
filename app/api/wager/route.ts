@@ -26,6 +26,12 @@ export async function POST(request: NextRequest) {
   const pool = getPool();
 
   try {
+    if (!userId) {
+      return NextResponse.json(
+        { message: "Unauthorized: Missing User ID" },
+        { status: 401 }
+      );
+    }
 
     if (!apiKey) {
       return NextResponse.json(
@@ -37,53 +43,59 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     stakeAmount = parseFloat(body.stake);
 
-    // 1. Balance Check & Reservation (if user is identified)
-    if (userId && !isNaN(stakeAmount) && stakeAmount > 0) {
-      // Get user from DB
-      const userResult = await pool.query(
-        "SELECT id FROM users WHERE firebase_uid = $1",
-        [userId]
+    if (isNaN(stakeAmount) || stakeAmount <= 0) {
+      return NextResponse.json(
+        { message: "Invalid stake amount" },
+        { status: 400 }
       );
-
-      if (userResult.rows.length === 0) {
-        return NextResponse.json({ message: "User not found" }, { status: 400 });
-      }
-
-      userIdDb = userResult.rows[0].id;
-
-      // Check balance
-      const balanceResult = await pool.query(
-        `SELECT COALESCE(SUM(amount), 0) as balance
-         FROM wallet_transactions
-         WHERE user_id = $1`,
-        [userIdDb]
-      );
-
-      const currentBalance = parseFloat(balanceResult.rows[0].balance) || 0;
-
-      if (currentBalance < stakeAmount) {
-        return NextResponse.json(
-          { message: `Insufficient balance. Available: $${currentBalance.toFixed(2)}` },
-          { status: 400 }
-        );
-      }
-
-      // Deduct (Reserve) funds
-      const newBalance = currentBalance - stakeAmount;
-      const txResult = await pool.query(
-        `INSERT INTO wallet_transactions (user_id, type, amount, balance_after, description)
-         VALUES ($1, 'withdraw', $2, $3, $4)
-         RETURNING id`,
-        [
-          userIdDb,
-          -stakeAmount, // Negative amount for withdrawal
-          newBalance,
-          `Wager reservation for market ${body.marketId}`
-        ]
-      );
-      transactionId = txResult.rows[0].id;
     }
 
+    // 1. Balance Check & Reservation
+    // Get user from DB
+    const userResult = await pool.query(
+      "SELECT id FROM users WHERE firebase_uid = $1",
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return NextResponse.json({ message: "User profile not initialized" }, { status: 400 });
+    }
+
+    userIdDb = userResult.rows[0].id;
+
+    // Check balance
+    const balanceResult = await pool.query(
+      `SELECT COALESCE(SUM(amount), 0) as balance
+       FROM wallet_transactions
+       WHERE user_id = $1`,
+      [userIdDb]
+    );
+
+    const currentBalance = parseFloat(balanceResult.rows[0].balance) || 0;
+
+    if (currentBalance < stakeAmount) {
+      return NextResponse.json(
+        { message: `Insufficient balance. Available: $${currentBalance.toFixed(2)}` },
+        { status: 400 }
+      );
+    }
+
+    // Deduct (Reserve) funds
+    const newBalance = currentBalance - stakeAmount;
+    const txResult = await pool.query(
+      `INSERT INTO wallet_transactions (user_id, type, amount, balance_after, description)
+       VALUES ($1, 'withdraw', $2, $3, $4)
+       RETURNING id`,
+      [
+        userIdDb,
+        -stakeAmount, // Negative amount for withdrawal
+        newBalance,
+        `Wager placed on market ${body.marketId}`
+      ]
+    );
+    transactionId = txResult.rows[0].id;
+
+    // 2. Call Core API
     // Generate HMAC signature
     const signature = generateSignature(apiKey, body);
 
@@ -115,10 +127,53 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // If successful, we could update the transaction description to include the Wager ID if we wanted,
-    // but the reservation is already valid.
+    const wagerData = response.data;
 
-    return NextResponse.json(response.data, { status: 201 });
+    // 3. Local Record Keeping (Success)
+    if (wagerData && wagerData.wagerId) {
+      try {
+        // Ensure market exists in local DB for foreign key constraint
+        await pool.query(
+          `INSERT INTO markets (id, title, status, pool_yes, pool_no, total_pool)
+           VALUES ($1, $2, 'OPEN', $3, $4, $5)
+           ON CONFLICT (id) DO NOTHING`,
+          [body.marketId, body.marketTitle || "Market", 0, 0, 0]
+        );
+
+        // Record the wager locally
+        const localWager = await pool.query(
+          `INSERT INTO wagers (
+            wager_id, user_id, market_id, selection, stake, 
+            odds_yes, odds_no, potential_win, status
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          RETURNING id`,
+          [
+            wagerData.wagerId,
+            userIdDb,
+            body.marketId,
+            body.selection,
+            stakeAmount,
+            wagerData.odds.yes,
+            wagerData.odds.no,
+            stakeAmount * wagerData.odds[body.selection],
+            "ACTIVE"
+          ]
+        );
+
+        // Link the wallet transaction to the wager
+        await pool.query(
+          "UPDATE wallet_transactions SET wager_id = $1 WHERE id = $2",
+          [localWager.rows[0].id, transactionId]
+        );
+
+      } catch (dbError) {
+        console.error("Failed to record wager locally, but core wager was successful:", dbError);
+        // This is tricky: the wager happened on the core, but our local record failed.
+        // We shouldn't fail the user request, but we need to log it.
+      }
+    }
+
+    return NextResponse.json(wagerData, { status: 201 });
   } catch (error: any) {
 
     // Rollback logic: Refund if we reserved funds but API call failed

@@ -11,6 +11,7 @@ import {
   GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
+  sendPasswordResetEmail,
 } from "firebase/auth";
 import { auth } from "./firebase";
 
@@ -20,6 +21,7 @@ interface AuthContextType {
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -50,17 +52,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (isMounted) {
         authStateFired = true;
         setUser(firebaseUser);
-        
+
         // Sync user to database
         if (firebaseUser) {
           // Store user info for API requests
-          if (typeof window !== "undefined") {
-            sessionStorage.setItem("firebase_uid", firebaseUser.uid);
-            if (firebaseUser.email) {
-              sessionStorage.setItem("user_email", firebaseUser.email);
+          try {
+            if (typeof window !== "undefined") {
+              sessionStorage.setItem("firebase_uid", firebaseUser.uid);
+              if (firebaseUser.email) {
+                sessionStorage.setItem("user_email", firebaseUser.email);
+              }
             }
+          } catch (e) {
+            console.warn("Storage restricted:", e);
           }
-          
+
           // Sync to database (non-blocking)
           import("./db-client").then(({ dbClient }) => {
             dbClient.syncUser(
@@ -71,14 +77,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               console.warn("Failed to sync user to database:", error);
             });
           });
-          
+
           // If we have a user, we can stop loading immediately
           setLoading(false);
         } else {
           // Clear session storage on logout
-          if (typeof window !== "undefined") {
-            sessionStorage.removeItem("firebase_uid");
-            sessionStorage.removeItem("user_email");
+          try {
+            if (typeof window !== "undefined") {
+              sessionStorage.removeItem("firebase_uid");
+              sessionStorage.removeItem("user_email");
+            }
+          } catch (e) {
+            // ignore
           }
           checkFinished();
         }
@@ -96,7 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (isMounted) {
           // Log the error but don't show it if it's unrelated to Google
           console.warn("Redirect check caught an error (often harmless):", error.code);
-          
+
           // If the error is 'auth/missing-password', it's likely from a 
           // previous email attempt. We ignore it so it doesn't block Google.
           if (error.code !== "auth/missing-password") {
@@ -129,24 +139,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithGoogle = async () => {
     if (!auth) throw new Error("Firebase Auth is not initialized");
-    
+
     const provider = new GoogleAuthProvider();
     provider.addScope("profile");
     provider.addScope("email");
     provider.setCustomParameters({
       prompt: "select_account"
     });
-    
+
     try {
       const result = await signInWithPopup(auth, provider);
       if (result.user) {
         setUser(result.user);
       }
     } catch (error: any) {
-      
+
       // If popup is blocked or fails with COOP issue, fallback to redirect
       if (
-        error.code === "auth/popup-blocked" || 
+        error.code === "auth/popup-blocked" ||
         error.code === "auth/popup-closed-by-user" ||
         error.code === "auth/cancelled-popup-request" ||
         error.message?.includes("Cross-Origin-Opener-Policy")
@@ -156,6 +166,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw error;
       }
     }
+  };
+
+  const sendPasswordReset = async (email: string) => {
+    if (!auth) throw new Error("Firebase Auth is not initialized");
+    await sendPasswordResetEmail(auth, email);
   };
 
   const logout = async () => {
@@ -171,6 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signInWithEmail,
         signUpWithEmail,
         signInWithGoogle,
+        sendPasswordReset,
         logout,
       }}
     >

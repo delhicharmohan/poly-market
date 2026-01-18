@@ -3,18 +3,20 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
-import { X, ArrowRight, ShieldCheck, Mail, Lock } from "lucide-react";
+import { X, ArrowRight, ShieldCheck, Mail, Lock, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { user, signInWithEmail, signUpWithEmail, signInWithGoogle, loading: authLoading } = useAuth();
+  const { user, signInWithEmail, signUpWithEmail, signInWithGoogle, sendPasswordReset, loading: authLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
+  const [isResetMode, setIsResetMode] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resetSent, setResetSent] = useState(false);
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -25,19 +27,28 @@ export default function LoginPage() {
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setResetSent(false);
+
+    if (isResetMode) {
+      setLoading(true);
+      try {
+        await sendPasswordReset(email);
+        setResetSent(true);
+      } catch (err: any) {
+        setError(err.message || "Failed to send reset email.");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     if (!isSignUp && !showPassword && email.trim()) {
       setShowPassword(true);
       return;
     }
 
-    if (isSignUp && !password.trim()) {
-      setError("Please enter a password (minimum 6 characters)");
-      return;
-    }
-
-    if (!isSignUp && showPassword && !password.trim()) {
-      setError("Please enter your password");
+    if (!password || password.length < 6) {
+      setError("Please enter a password with at least 6 characters.");
       return;
     }
 
@@ -48,10 +59,35 @@ export default function LoginPage() {
       } else {
         await signInWithEmail(email, password);
       }
-      router.push("/");
+      // Rely on useEffect for redirect to ensure auth state is fully synced
     } catch (err: any) {
-      setError(err.message || "Authentication failed.");
-    } finally {
+      console.error("Auth error caught in form:", err);
+      let friendlyMessage = "Authentication failed. Please try again.";
+
+      const errorCode = err.code || "";
+
+      if (errorCode === "auth/user-not-found" || errorCode === "auth/invalid-credential") {
+        friendlyMessage = isSignUp
+          ? "Invalid account details. Please ensure your email is correct."
+          : "Account not found or password incorrect. New user? Please register below.";
+      }
+      else if (errorCode === "auth/wrong-password") {
+        friendlyMessage = "Incorrect password. Please try again.";
+      }
+      else if (errorCode === "auth/email-already-in-use") {
+        friendlyMessage = "This email is already registered. Please sign in instead.";
+      }
+      else if (errorCode === "auth/invalid-email") {
+        friendlyMessage = "Invalid email format. Please check your spelling.";
+      }
+      else if (errorCode === "auth/weak-password") {
+        friendlyMessage = "Password is too weak. Please use at least 6 characters.";
+      }
+      else if (err.message) {
+        friendlyMessage = err.message;
+      }
+
+      setError(friendlyMessage);
       setLoading(false);
     }
   };
@@ -84,20 +120,38 @@ export default function LoginPage() {
             INDIMARKET
           </h1>
           <p className="text-sm font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">
-            {isSignUp ? "Create Secure Account" : "Identity Verification"}
+            {isResetMode ? "Account Recovery" : isSignUp ? "Create Secure Account" : "Identity Verification"}
           </p>
         </div>
 
         {/* Auth Card */}
-        <div className="bg-slate-50/50 dark:bg-slate-900/30 border border-slate-100 dark:border-slate-800 rounded-[2.5rem] p-8 shadow-2xl">
+        <div className="bg-slate-50/50 dark:bg-slate-900/30 border border-slate-100 dark:border-slate-800 rounded-[2.5rem] p-8 shadow-2xl relative">
+
+          {isResetMode && (
+            <button
+              onClick={() => { setIsResetMode(false); setError(null); setResetSent(false); }}
+              className="absolute top-6 left-6 text-slate-400 hover:text-indigo-500 transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+          )}
+
           {error && (
             <div className="mb-6 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-2xl p-4">
               <p className="text-xs font-bold text-red-600 dark:text-red-400 leading-relaxed">{error}</p>
             </div>
           )}
 
+          {resetSent && (
+            <div className="mb-6 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/30 rounded-2xl p-4">
+              <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 leading-relaxed italic uppercase tracking-wider">
+                Recovery sequence initiated. Check your inbox for the reset link.
+              </p>
+            </div>
+          )}
+
           {/* Google Button */}
-          {!showPassword && !isSignUp && (
+          {!showPassword && !isSignUp && !isResetMode && (
             <>
               <button
                 onClick={handleGoogleSignIn}
@@ -118,7 +172,7 @@ export default function LoginPage() {
                   <div className="w-full border-t border-slate-200 dark:border-slate-800"></div>
                 </div>
                 <div className="relative flex justify-center text-[10px] font-black uppercase tracking-[0.3em] text-slate-300 dark:text-slate-600">
-                  <span className="px-4 bg-[#f8fafc] dark:bg-[#020617]">Proton Auth</span>
+                  <span className="px-4 bg-white dark:bg-slate-950 transition-colors">Proton Auth</span>
                 </div>
               </div>
             </>
@@ -133,12 +187,12 @@ export default function LoginPage() {
                 onChange={(e) => { setEmail(e.target.value); setError(null); }}
                 placeholder="Secure Email"
                 required
-                disabled={showPassword && !isSignUp}
+                disabled={showPassword && !isSignUp && !isResetMode}
                 className="w-full pl-12 pr-4 py-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 font-bold transition-all"
               />
             </div>
 
-            {((!isSignUp && showPassword) || isSignUp) && (
+            {((!isSignUp && showPassword) || isSignUp) && !isResetMode && (
               <div className="relative animate-in slide-in-from-top-2 duration-300">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 z-10" />
                 <input
@@ -153,6 +207,18 @@ export default function LoginPage() {
               </div>
             )}
 
+            {showPassword && !isSignUp && !isResetMode && (
+              <div className="text-right">
+                <button
+                  type="button"
+                  onClick={() => { setIsResetMode(true); setError(null); setPassword(""); }}
+                  className="text-[10px] font-black text-slate-400 hover:text-indigo-500 uppercase tracking-widest transition-colors"
+                >
+                  Forgot Access Key?
+                </button>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={loading || !email}
@@ -163,7 +229,7 @@ export default function LoginPage() {
               ) : (
                 <>
                   <span className="uppercase tracking-widest text-xs">
-                    {isSignUp ? "Create Vault" : showPassword ? "Verify Identity" : "Continue"}
+                    {isResetMode ? "Send Reset Link" : isSignUp ? "Create Vault" : showPassword ? "Verify Identity" : "Continue"}
                   </span>
                   <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
                 </>
@@ -172,12 +238,14 @@ export default function LoginPage() {
           </form>
 
           {/* Toggle */}
-          <button
-            onClick={() => { setIsSignUp(!isSignUp); setShowPassword(false); setError(null); }}
-            className="w-full mt-8 text-[11px] font-black text-slate-400 hover:text-indigo-500 dark:text-slate-500 dark:hover:text-indigo-400 uppercase tracking-widest transition-colors"
-          >
-            {isSignUp ? "Existng User? Sign In" : "New User? Register Vault"}
-          </button>
+          {!isResetMode && (
+            <button
+              onClick={() => { setIsSignUp(!isSignUp); setShowPassword(false); setError(null); }}
+              className="w-full mt-8 text-[11px] font-black text-slate-400 hover:text-indigo-500 dark:text-slate-500 dark:hover:text-indigo-400 uppercase tracking-widest transition-colors"
+            >
+              {isSignUp ? "Existng User? Sign In" : "New User? Register Vault"}
+            </button>
+          )}
         </div>
 
         {/* Bottom Security Note */}
