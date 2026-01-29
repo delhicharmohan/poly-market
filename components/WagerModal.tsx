@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Market } from "@/types";
+import { Market, WagerResponse } from "@/types";
 import { api } from "@/lib/api";
 import { wallet } from "@/lib/wallet";
 import { transactions } from "@/lib/transactions";
@@ -10,7 +10,7 @@ import { X, CheckCircle, AlertCircle } from "lucide-react";
 interface WagerModalProps {
   market: Market;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (result?: WagerResponse) => void;
   preSelected?: "yes" | "no";
 }
 
@@ -20,7 +20,7 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [wagerResult, setWagerResult] = useState<any>(null);
+  const [wagerResult, setWagerResult] = useState<WagerResponse | null>(null);
   const [balance, setBalance] = useState(0);
 
   useEffect(() => {
@@ -46,11 +46,11 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
     }
   }, [balance, stake]);
 
-  const poolYes = parseFloat(market.pool_yes);
-  const poolNo = parseFloat(market.pool_no);
-  const totalPool = parseFloat(market.total_pool);
-  const oddsYes = market.odds?.yes || (totalPool / poolYes);
-  const oddsNo = market.odds?.no || (totalPool / poolNo);
+  const poolYes = parseFloat(market.pool_yes) || 0;
+  const poolNo = parseFloat(market.pool_no) || 0;
+  const totalPool = parseFloat(market.total_pool) || poolYes + poolNo;
+  const oddsYes = market.odds?.yes ?? (totalPool > 0 && poolYes > 0 ? totalPool / poolYes : 1);
+  const oddsNo = market.odds?.no ?? (totalPool > 0 && poolNo > 0 ? totalPool / poolNo : 1);
 
   // Calculate potential winnings
   const stakeAmount = parseFloat(stake) || 0;
@@ -130,8 +130,8 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
   };
 
   const handleClose = () => {
-    if (success) {
-      onSuccess();
+    if (success && wagerResult) {
+      onSuccess(wagerResult);
     } else {
       onClose();
     }
@@ -169,7 +169,25 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
                 <span className="font-medium">Stake:</span> ${wagerResult.stake.toFixed(2)}
               </div>
               <div>
-                <span className="font-medium">Odds:</span> {wagerResult.odds[wagerResult.selection].toFixed(2)}x
+                <span className="font-medium">Odds:</span>{" "}
+                {wagerResult.odds?.[wagerResult.selection] != null
+                  ? `${Number(wagerResult.odds[wagerResult.selection]).toFixed(2)}x`
+                  : "—"}
+              </div>
+              <div>
+                <span className="font-medium">Possible winning:</span>{" "}
+                {(() => {
+                  const fromB2B = wagerResult.potentialWin;
+                  if (fromB2B != null && !isNaN(fromB2B) && fromB2B >= 0) {
+                    return `$${Number(fromB2B).toFixed(2)} (after commission)`;
+                  }
+                  const oddsVal = wagerResult.odds?.[wagerResult.selection];
+                  const computed = typeof oddsVal === "number" && oddsVal > 0 ? wagerResult.stake * oddsVal : 0;
+                  if (computed > wagerResult.stake) {
+                    return `$${computed.toFixed(2)} (before commission)`;
+                  }
+                  return "— (calculated at settlement, after commission)";
+                })()}
               </div>
             </div>
           </div>

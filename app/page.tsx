@@ -78,10 +78,16 @@ export default function Home() {
     setShowWagerModal(true);
   };
 
-  const handleWagerSuccess = () => {
+  const handleWagerSuccess = (result?: { metrics?: Market["metrics"] }) => {
+    const marketId = selectedMarket?.id;
     setShowWagerModal(false);
     setSelectedMarket(null);
-    // Optionally refresh markets to show updated pools
+    // Merge B2B metrics (percentage) from wager response onto the card
+    if (marketId && result?.metrics) {
+      setMarkets((prev) =>
+        prev.map((m) => (m.id === marketId ? { ...m, metrics: result.metrics } : m))
+      );
+    }
     fetchMarkets();
   };
 

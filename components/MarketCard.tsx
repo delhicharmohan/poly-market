@@ -61,8 +61,16 @@ export default function MarketCard({ market, onPlaceWager }: MarketCardProps) {
   const oddsYes = market.odds?.yes || (totalPool > 0 ? (totalPool / (poolYes || 1)) : 2);
   const oddsNo = market.odds?.no || (totalPool > 0 ? (totalPool / (poolNo || 1)) : 2);
 
-  const yesPercent = totalPool > 0 ? (poolYes / totalPool) * 100 : 50;
-  const noPercent = 100 - yesPercent;
+  // Use B2B metrics percentage when present (wager response / WebSocket), else derive from pools
+  const yesPercent =
+    market.metrics?.yesPercent != null
+      ? Number(market.metrics.yesPercent)
+      : market.metrics?.percentage != null
+        ? Number(market.metrics.percentage)
+        : totalPool > 0
+          ? (poolYes / totalPool) * 100
+          : 50;
+  const noPercent = market.metrics?.noPercent != null ? Number(market.metrics.noPercent) : 100 - yesPercent;
 
   const marketImage = market.image || getMarketImage(market.category, market.title);
   const isClosingSoon = timeRemaining > 0 && timeRemaining < 24 * 60 * 60 * 1000; // Less than 24h
@@ -125,6 +133,9 @@ export default function MarketCard({ market, onPlaceWager }: MarketCardProps) {
                 <span className="text-lg font-black text-slate-900 dark:text-white">
                   {oddsYes.toFixed(2)}<span className="text-xs ml-0.5">x</span>
                 </span>
+                <span className="text-[10px] font-semibold text-green-600/80 dark:text-green-400/80 mt-0.5">
+                  {yesPercent.toFixed(0)}%
+                </span>
               </div>
             </button>
 
@@ -137,6 +148,9 @@ export default function MarketCard({ market, onPlaceWager }: MarketCardProps) {
                 <span className="text-[10px] font-bold text-red-600 dark:text-red-400 mb-1">BUY NO</span>
                 <span className="text-lg font-black text-slate-900 dark:text-white">
                   {oddsNo.toFixed(2)}<span className="text-xs ml-0.5">x</span>
+                </span>
+                <span className="text-[10px] font-semibold text-red-600/80 dark:text-red-400/80 mt-0.5">
+                  {noPercent.toFixed(0)}%
                 </span>
               </div>
             </button>

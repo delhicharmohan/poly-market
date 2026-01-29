@@ -140,6 +140,12 @@ export async function POST(request: NextRequest) {
           [body.marketId, body.marketTitle || "Market", 0, 0, 0]
         );
 
+        // B2B may omit odds (e.g. pari-mutuel); use fallbacks so we can still record locally
+        const oddsYes = wagerData.odds?.yes ?? 1;
+        const oddsNo = wagerData.odds?.no ?? 1;
+        const oddsForSelection = body.selection === "yes" ? oddsYes : oddsNo;
+        const potentialWin = stakeAmount * oddsForSelection;
+
         // Record the wager locally
         const localWager = await pool.query(
           `INSERT INTO wagers (
@@ -153,9 +159,9 @@ export async function POST(request: NextRequest) {
             body.marketId,
             body.selection,
             stakeAmount,
-            wagerData.odds.yes,
-            wagerData.odds.no,
-            stakeAmount * wagerData.odds[body.selection],
+            oddsYes,
+            oddsNo,
+            potentialWin,
             "ACTIVE"
           ]
         );
@@ -176,7 +182,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(wagerData, { status: 201 });
   } catch (error: any) {
 
-    // Rollback logic: Refund if we reserved funds but API call failed
+    // Refund only when we had actually deducted (transactionId set). Never add funds otherwise.
     if (transactionId && userIdDb) {
       try {
         // We need to calculate the balance *again* or trust the logic. 

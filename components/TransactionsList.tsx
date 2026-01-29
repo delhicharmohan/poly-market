@@ -58,7 +58,12 @@ export default function TransactionsList() {
 
   const getTransactionLabel = (tx: Transaction) => {
     switch (tx.type) {
-      case "deposit": return "Deposit";
+      case "deposit": {
+        const d = (tx.description || "").toLowerCase();
+        if (d.includes("refund")) return "Refund";
+        if (d.includes("free points") || d.includes("purchase")) return "Purchase";
+        return "Deposit";
+      }
       case "withdraw": return tx.wagerId ? "Wager" : "Withdrawal";
       case "win": return "Win Payout";
       case "wager": return "Wager";
@@ -139,11 +144,14 @@ export default function TransactionsList() {
                   </h4>
                 </div>
 
-                {/* Amount and Compact Status */}
+                {/* Amount, Balance After, and Status */}
                 <div className="flex flex-col items-end flex-shrink-0 pt-0.5">
                   <span className={`text-sm font-bold tabular-nums ${isCredit ? "text-emerald-600 dark:text-emerald-500" : "text-slate-900 dark:text-white"
                     }`}>
                     {isCredit ? "+" : "-"}${amountValue?.toFixed(2)}
+                  </span>
+                  <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-300 mt-0.5 tabular-nums">
+                    Balance: ${(tx.balanceAfter ?? 0).toFixed(2)}
                   </span>
                   <div className="flex items-center gap-1.5 mt-1">
                     <span className={`text-[10px] font-medium ${getStatusText(tx) === "Pending" ? "text-amber-600" : "text-slate-400 dark:text-slate-500"

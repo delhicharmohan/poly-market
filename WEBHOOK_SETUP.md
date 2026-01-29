@@ -41,28 +41,46 @@ The provider should send POST requests with the following payload:
 
 ### Required Fields
 
+The B2B engine **must** send a `wagers` array (Antigravity format). We rely on the settlement webhook only and **never** use `potential_win` (no fallback). See **PROVIDER_INTEGRATION_GUIDE.md** for the full spec.
+
 ```json
 {
   "event": "market.settled",
-  "marketId": "market_123",
+  "marketId": "382f1bcd-a198-4475-b7ac-5be3a10432aa",
   "marketStatus": "SETTLED",
-  "outcome": "yes"
+  "outcome": "yes",
+  "timestamp": 1706560599000,
+  "wagers": [
+    {
+      "wagerId": "wager-uuid-12345",
+      "userId": "merchant_user_id_from_your_platform",
+      "won": true,
+      "payout": 150.50
+    },
+    {
+      "wagerId": "wager-uuid-67890",
+      "userId": "another_user_id",
+      "won": false,
+      "payout": 0.00
+    }
+  ]
 }
 ```
+
+- **`wagers`** (required): Array of `{ wagerId, userId?, won, payout }`. Can be `[]` if there are no wagers.
+- Every **winning** wager (matching `marketId` and winning `outcome`) must have an entry in `wagers` with **`won: true`** and a valid **`payout`** (number ≥ 0). If any winner is missing or has `won !== true`, the webhook returns `400` with `missingWagerIds` or `invalidWagerIds`.
+- `wagerId` must match the B2B wager id (returned when the wager was placed).
+- `payout` is the final amount to credit (pari-mutuel, after rake). Use `0` when `won: false`.
 
 ### Optional Fields
 
 ```json
 {
-  "event": "market.settled",
-  "marketId": "market_123",
-  "marketStatus": "SETTLED",
-  "outcome": "yes",
-  "timestamp": 1234567890
+  "marketTitle": "Will X happen?"
 }
 ```
 
-**Note:** The system automatically finds and processes all wagers for the market based on the outcome. Individual wager details are not required.
+**Note:** We do not fall back to `potential_win` at any time. The B2B engine must send the correct `wagers` with `won` and `payout` for each wager (pari-mutuel).
 
 ## Security
 

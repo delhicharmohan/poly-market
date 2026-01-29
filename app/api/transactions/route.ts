@@ -62,31 +62,64 @@ export async function GET(request: NextRequest) {
       [userId_db]
     );
 
-    const transactions = result.rows.map((row) => {
-      const isWagerRelated = row.type === 'wager' || row.type === 'win' || (row.type === 'withdraw' && row.wagerIdDb);
+    // Exclude failed-wager pairs: the withdraw (stake deducted) and its refund. Only show successful wagers.
+    const REFUND_DESC = "Refund: Wager implementation failed";
+    const WAGER_WITHDRAW_DESC = "Wager placed on market";
+    const excludeIds = new Set<string>();
+    const usedWithdrawIds = new Set<string>();
+    const refunds = result.rows
+      .filter((r: { type: string; description?: string }) => r.type === "deposit" && r.description?.includes(REFUND_DESC))
+      .sort((a: { timestamp: string | number }, b: { timestamp: string | number }) => parseInt(String(a.timestamp)) - parseInt(String(b.timestamp)));
+    for (const refund of refunds) {
+      const refundAmount = parseFloat(refund.amount);
+      const refundTs = parseInt(String(refund.timestamp));
+      const candidates = result.rows.filter(
+        (r: { type: string; amount: string | number; wagerIdDb?: string; description?: string; timestamp: string | number; id: string }) =>
+          r.type === "withdraw" &&
+          parseFloat(String(r.amount)) === -refundAmount &&
+          !r.wagerIdDb &&
+          r.description?.includes(WAGER_WITHDRAW_DESC) &&
+          parseInt(String(r.timestamp)) < refundTs &&
+          !usedWithdrawIds.has(r.id)
+      );
+      const matchingWithdraw = candidates.length
+        ? candidates.reduce((prev: { timestamp: string | number }, curr: { timestamp: string | number }) =>
+            parseInt(String(curr.timestamp)) > parseInt(String(prev.timestamp)) ? curr : prev
+          )
+        : null;
+      if (matchingWithdraw) {
+        excludeIds.add(refund.id);
+        excludeIds.add(matchingWithdraw.id);
+        usedWithdrawIds.add(matchingWithdraw.id);
+      }
+    }
 
-      return {
-        id: row.id,
-        type: row.type,
-        amount: parseFloat(row.amount),
-        balanceAfter: parseFloat(row.balanceAfter),
-        description: row.description,
-        timestamp: parseInt(row.timestamp),
-        wagerId: row.wagerId,
-        marketId: row.marketId,
-        marketTitle: row.marketTitle || (row.type === 'win' ? "Winnings" : (row.type === 'withdraw' ? "Withdrawal" : "Deposit")),
-        selection: row.selection,
-        stake: row.stake ? parseFloat(row.stake) : undefined,
-        odds: row.oddsYes ? {
-          yes: parseFloat(row.oddsYes),
-          no: parseFloat(row.oddsNo),
-        } : undefined,
-        potentialWin: row.potentialWin ? parseFloat(row.potentialWin) : undefined,
-        payout: row.type === 'win' ? parseFloat(row.amount) : (row.wagerStatus === 'WON' ? row.potentialWin : undefined),
-        status: row.wagerStatus || 'COMPLETED',
-        marketStatus: row.marketStatus || 'OPEN',
-      };
-    });
+    const transactions = result.rows
+      .filter((row: { id: string }) => !excludeIds.has(row.id))
+      .map((row: Record<string, unknown>) => {
+        const isWagerRelated = row.type === "wager" || row.type === "win" || (row.type === "withdraw" && row.wagerIdDb);
+
+        return {
+          id: row.id,
+          type: row.type,
+          amount: parseFloat(row.amount as string),
+          balanceAfter: parseFloat(row.balanceAfter as string),
+          description: row.description,
+          timestamp: parseInt(row.timestamp as string),
+          wagerId: row.wagerId,
+          marketId: row.marketId,
+          marketTitle: row.marketTitle || (row.type === "win" ? "Winnings" : row.type === "withdraw" ? "Withdrawal" : "Deposit"),
+          selection: row.selection,
+          stake: row.stake ? parseFloat(row.stake as string) : undefined,
+          odds: row.oddsYes
+            ? { yes: parseFloat(row.oddsYes as string), no: parseFloat(row.oddsNo as string) }
+            : undefined,
+          potentialWin: row.potentialWin ? parseFloat(row.potentialWin as string) : undefined,
+          payout: row.type === "win" ? parseFloat(row.amount as string) : (row.wagerStatus === "WON" ? row.potentialWin : undefined),
+          status: row.wagerStatus || "COMPLETED",
+          marketStatus: row.marketStatus || "OPEN",
+        };
+      });
 
     return NextResponse.json({ transactions });
   } catch (error: any) {

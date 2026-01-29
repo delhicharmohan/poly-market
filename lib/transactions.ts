@@ -56,7 +56,10 @@ class Transactions {
     market: Market,
     userEmail?: string
   ): Promise<void> {
-    const potentialWin = wagerResult.stake * wagerResult.odds[wagerResult.selection];
+    // B2B may omit odds (e.g. pari-mutuel); use fallback for display, settlement uses webhook payouts
+    const odds = wagerResult.odds ?? { yes: 1, no: 1 };
+    const oddsForSelection = odds[wagerResult.selection] ?? 1;
+    const potentialWin = wagerResult.stake * oddsForSelection;
 
     const transaction: Transaction = {
       id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -67,7 +70,7 @@ class Transactions {
       selection: wagerResult.selection,
       stake: wagerResult.stake,
       amount: -wagerResult.stake, // Negative for wager
-      odds: wagerResult.odds,
+      odds,
       potentialWin,
       status: wagerResult.status,
       timestamp: Date.now(),

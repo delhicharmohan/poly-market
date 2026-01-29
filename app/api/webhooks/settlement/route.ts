@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       console.warn("Webhook received without signature. Consider implementing signature verification for security.");
     }
 
-    // Parse the webhook payload
+    // Parse the webhook payload (Antigravity B2B format: wagers array with wagerId, userId, won, payout)
     const payload = JSON.parse(rawBody);
     const {
       event,
@@ -64,8 +64,29 @@ export async function POST(request: NextRequest) {
       marketStatus,
       outcome, // 'yes' or 'no' - the winning outcome
       timestamp,
-      marketTitle // Optional: market title if provided
+      marketTitle, // Optional: market title if provided
+      // Required: B2B sends wagers with outcome and payout per wager. We never use potential_win.
+      wagers: wagersFromB2B,
     } = payload;
+
+    // Require wagers array — we rely on settlement webhook only, no fallback to potential_win
+    if (!Array.isArray(wagersFromB2B)) {
+      return NextResponse.json(
+        { message: "wagers array is required for settlement. B2B engine must send wagers with wagerId, won, payout (can be empty array if no wagers)." },
+        { status: 400 }
+      );
+    }
+
+    // Map B2B wagerId -> { won, payout } for crediting only when won === true
+    const wagerResultByWagerId = new Map<string, { won: boolean; payout: number }>();
+    for (const entry of wagersFromB2B) {
+      const wagerId = entry?.wagerId ?? entry?.wager_id;
+      const won = entry?.won === true;
+      const payout = typeof entry?.payout === "number" ? entry.payout : parseFloat(entry?.payout);
+      if (wagerId != null && String(wagerId).trim() !== "" && !isNaN(payout) && payout >= 0) {
+        wagerResultByWagerId.set(String(wagerId).trim(), { won, payout });
+      }
+    }
 
     // Validate required fields
     if (!event || !marketId || !marketStatus || !outcome) {
@@ -149,12 +170,6 @@ export async function POST(request: NextRequest) {
       }
 
       // Update all wagers for this market
-      // Mark winning wagers as WON and losing as LOST
-      if (!outcome) {
-        throw new Error("Outcome is required. Must be 'yes' or 'no'");
-      }
-
-      // Update all wagers for this market
       const wagerUpdateResult = await pool.query(
         `UPDATE wagers 
          SET status = CASE 
@@ -176,16 +191,47 @@ export async function POST(request: NextRequest) {
         console.warn(`No wagers found for market '${marketId}' to update`);
       }
 
-      // Credit winnings to users who won
-      // Calculate payout: stake * odds for winning selection
+      // Credit winnings using only B2B settlement payouts (no fallback to potential_win)
       const winningWagers = await pool.query(
-        `SELECT w.id, w.user_id, w.stake, w.potential_win,
+        `SELECT w.id, w.wager_id, w.user_id, w.stake, w.potential_win,
                 CASE WHEN w.selection = 'yes' THEN w.odds_yes ELSE w.odds_no END as odds
          FROM wagers w
          WHERE w.market_id = $1 
            AND w.selection = $2`,
         [marketId, outcome]
       );
+
+      // Require a wagers entry for every winning wager (won: true, payout) — we do not use potential_win
+      const missingWagerIds: string[] = [];
+      const invalidWagerIds: string[] = [];
+      for (const wager of winningWagers.rows) {
+        const result = wagerResultByWagerId.get(wager.wager_id);
+        if (!result) {
+          missingWagerIds.push(wager.wager_id);
+        } else if (!result.won) {
+          invalidWagerIds.push(wager.wager_id);
+        }
+      }
+      if (missingWagerIds.length > 0) {
+        await pool.query("ROLLBACK");
+        return NextResponse.json(
+          {
+            message: "Settlement webhook must include all winning wagers. Missing wager id(s): " + missingWagerIds.join(", "),
+            missingWagerIds,
+          },
+          { status: 400 }
+        );
+      }
+      if (invalidWagerIds.length > 0) {
+        await pool.query("ROLLBACK");
+        return NextResponse.json(
+          {
+            message: "Settlement webhook must have won: true for each winning wager. Invalid (won !== true) for wager id(s): " + invalidWagerIds.join(", "),
+            invalidWagerIds,
+          },
+          { status: 400 }
+        );
+      }
 
       for (const wager of winningWagers.rows) {
         // IDEMPOTENCY CHECK: Check if this wager has already been credited
@@ -199,8 +245,8 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        // Use potential_win as the payout (already calculated when wager was placed)
-        const payout = parseFloat(wager.potential_win);
+        // Use only B2B payout from wagers payload (no fallback to potential_win)
+        const payout = wagerResultByWagerId.get(wager.wager_id)!.payout;
 
         // Update wager with actual payout
         await pool.query(
@@ -280,7 +326,8 @@ export async function GET(request: NextRequest) {
     method: "POST",
     apiKeyConfigured,
     optionalHeaders: ["X-Merchant-Signature", "X-Webhook-Signature"],
-    requiredFields: ["event", "marketId", "marketStatus", "outcome"],
+    requiredFields: ["event", "marketId", "marketStatus", "outcome", "wagers"],
+    wagersNote: "wagers must be an array (can be [] if no wagers). Each item: { wagerId, userId?, won, payout }. We credit only when won === true using payout. We never use potential_win.",
     note: "API key is configured server-side via MERCHANT_API_KEY environment variable. Signature is calculated using HMAC-SHA256 with the API key as the secret.",
   });
 }

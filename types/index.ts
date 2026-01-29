@@ -1,6 +1,16 @@
 export type MarketCategory = "Crypto" | "Finance" | "NFL" | "NBA" | "Cricket" | "Football" | "Politics" | "Election" | "World" | "Sports";
 export type MarketTerm = "Ultra Short" | "Short" | "Long";
 
+/** Metrics from B2B (wager response / WebSocket). Use percentage on card when present. */
+export interface MarketMetrics {
+  /** Yes outcome share (0–100). */
+  yesPercent?: number;
+  /** No outcome share (0–100). */
+  noPercent?: number;
+  /** Single percentage (e.g. yes share); noPercent = 100 - percentage. */
+  percentage?: number;
+}
+
 export interface Market {
   id: string;
   title: string;
@@ -19,6 +29,8 @@ export interface Market {
     yes: number;
     no: number;
   };
+  /** B2B metrics (wager response / WebSocket). Use for percentage on card. */
+  metrics?: MarketMetrics;
 }
 
 export interface WagerRequest {
@@ -33,10 +45,14 @@ export interface WagerResponse {
   marketId: string;
   stake: number;
   selection: "yes" | "no";
-  odds: {
+  odds?: {
     yes: number;
     no: number;
   };
+  /** B2B metrics (percentage etc.). Used on market card when present. */
+  metrics?: MarketMetrics;
+  /** Possible winning after platform commission. Prefer this over stake × odds in UI. */
+  potentialWin?: number;
 }
 
 export interface ApiError {

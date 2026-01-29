@@ -117,7 +117,7 @@ export default function WalletModal({ onClose }: WalletModalProps) {
               className="flex flex-col items-center justify-center p-4 bg-emerald-50 dark:bg-emerald-900/20 border-2 border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 hover:border-emerald-300 dark:hover:border-emerald-700 transition-all duration-200 hover:scale-105 active:scale-95"
             >
               <ArrowDownCircle className="h-8 w-8 text-emerald-600 dark:text-emerald-400 mb-2" />
-              <span className="font-semibold text-emerald-700 dark:text-emerald-300">Deposit</span>
+              <span className="font-semibold text-emerald-700 dark:text-emerald-300">Add funds</span>
             </button>
             <button
               onClick={() => {
@@ -144,10 +144,13 @@ export default function WalletModal({ onClose }: WalletModalProps) {
           </div>
         )}
 
-        {/* Deposit Form */}
+        {/* Add funds = buy a painting (only way to add funds) */}
         {showDeposit && !success && (
           <div className="space-y-4 animate-fadeIn">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Deposit Funds</h3>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Add Funds</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              The only way to add funds is by buying a painting. You get free wagering points (same amount) to use on markets.
+            </p>
             {error && (
               <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
                 <span className="text-sm text-red-600 dark:text-red-400">{error}</span>
@@ -155,7 +158,7 @@ export default function WalletModal({ onClose }: WalletModalProps) {
             )}
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                Amount ($)
+                Amount ($) – you’ll get this much in free points after purchase
               </label>
               <input
                 type="number"
@@ -186,7 +189,7 @@ export default function WalletModal({ onClose }: WalletModalProps) {
                 onClick={handleDeposit}
                 className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors"
               >
-                Deposit
+                Buy painting to get points
               </button>
             </div>
           </div>
