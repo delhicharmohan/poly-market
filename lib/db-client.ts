@@ -111,6 +111,136 @@ export class DatabaseClient {
       throw new Error(error.response?.data?.message || "Failed to update wallet");
     }
   }
+
+  /** Admin only. Returns all sales with user info. */
+  async getAdminSales(): Promise<
+    {
+      id: string;
+      invoiceNumber: string;
+      paintingId: string;
+      paintingName: string;
+      paintingImageUrl: string | null;
+      amountInr: number;
+      emailSentAt: string | null;
+      createdAt: string;
+      userEmail?: string;
+      userDisplayName?: string | null;
+    }[]
+  > {
+    try {
+      const response = await axios.get("/api/admin/sales", {
+        headers: this.getHeaders(),
+      });
+      return response.data.sales || [];
+    } catch (error) {
+      console.error("Failed to fetch admin sales:", error);
+      return [];
+    }
+  }
+
+  async getSales(): Promise<
+    {
+      id: string;
+      invoiceNumber: string;
+      paintingId: string;
+      paintingName: string;
+      paintingImageUrl: string | null;
+      amountInr: number;
+      emailSentAt: string | null;
+      createdAt: string;
+    }[]
+  > {
+    try {
+      const response = await axios.get("/api/sales", {
+        headers: this.getHeaders(),
+      });
+      return response.data.sales || [];
+    } catch (error) {
+      console.error("Failed to fetch sales:", error);
+      return [];
+    }
+  }
+
+  /** Admin only. Returns { isAdmin: boolean }. */
+  async getAdminMe(): Promise<{ isAdmin: boolean }> {
+    try {
+      const response = await axios.get("/api/admin/me", {
+        headers: this.getHeaders(),
+      });
+      return response.data;
+    } catch (error) {
+      return { isAdmin: false };
+    }
+  }
+
+  /** Admin only. Returns all users with balance. */
+  async getAdminUsers(): Promise<
+    {
+      id: string;
+      firebaseUid: string;
+      email: string;
+      displayName: string | null;
+      balance: number;
+      createdAt: string;
+    }[]
+  > {
+    try {
+      const response = await axios.get("/api/admin/users", {
+        headers: this.getHeaders(),
+      });
+      return response.data.users || [];
+    } catch (error) {
+      console.error("Failed to fetch admin users:", error);
+      return [];
+    }
+  }
+
+  /** Admin only. Returns all transactions with user info. */
+  async getAdminTransactions(): Promise<
+    {
+      id: string;
+      userEmail: string;
+      userDisplayName: string | null;
+      type: string;
+      amount: number;
+      balanceAfter: number;
+      description: string | null;
+      timestamp: number;
+      wagerId?: string;
+      marketId?: string;
+      marketTitle?: string;
+      selection?: string;
+      stake?: number;
+      odds?: { yes: number; no: number };
+      potentialWin?: number;
+      status?: string;
+      marketStatus?: string;
+    }[]
+  > {
+    try {
+      const response = await axios.get("/api/admin/transactions", {
+        headers: this.getHeaders(),
+      });
+      return response.data.transactions || [];
+    } catch (error) {
+      console.error("Failed to fetch admin transactions:", error);
+      return [];
+    }
+  }
+
+  async purchasePainting(params: {
+    paintingId: string;
+    paintingName: string;
+    paintingImageUrl?: string;
+    amountInr: number;
+  }) {
+    const response = await axios.post(
+      "/api/sales",
+      params,
+      { headers: this.getHeaders() }
+    );
+    return response.data;
+  }
 }
 
 export const dbClient = new DatabaseClient();

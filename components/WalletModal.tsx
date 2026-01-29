@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { wallet } from "@/lib/wallet";
 import { triggerConfetti } from "@/lib/confetti";
 import { X, Wallet as WalletIcon, ArrowDownCircle, ArrowUpCircle, DollarSign } from "lucide-react";
@@ -10,6 +11,7 @@ interface WalletModalProps {
 }
 
 export default function WalletModal({ onClose }: WalletModalProps) {
+  const router = useRouter();
   const [balance, setBalance] = useState(0);
   const [showDeposit, setShowDeposit] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
@@ -18,15 +20,15 @@ export default function WalletModal({ onClose }: WalletModalProps) {
   const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    wallet.getBalance().then(setBalance);
+    wallet.getBalance(true).then(setBalance);
   }, []);
 
   const refreshBalance = async () => {
-    const newBalance = await wallet.getBalance();
+    const newBalance = await wallet.getBalance(true);
     setBalance(newBalance);
   };
 
-  const handleDeposit = async () => {
+  const handleDeposit = () => {
     setError(null);
     setSuccess(null);
     const depositAmount = parseFloat(amount);
@@ -36,21 +38,11 @@ export default function WalletModal({ onClose }: WalletModalProps) {
       return;
     }
 
-    const success = await wallet.deposit(depositAmount);
-    if (success) {
-      setSuccess(`Successfully deposited $${depositAmount.toFixed(2)}`);
-      setAmount("");
-      await refreshBalance();
-
-      // Close modal and return to home after celebration
-      setTimeout(() => {
-        setShowDeposit(false);
-        setSuccess(null);
-        onClose();
-      }, 2000);
-    } else {
-      setError("Failed to deposit. Please try again.");
-    }
+    // Do not top up wallet here. User chooses a painting; free points are added only when buy is complete.
+    setShowDeposit(false);
+    setAmount("");
+    onClose();
+    router.push(`/merchandise?amount=${depositAmount.toFixed(2)}`);
   };
 
   const handleWithdraw = async () => {

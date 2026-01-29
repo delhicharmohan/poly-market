@@ -2,21 +2,31 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, User, LogOut, Mail, History, ChevronRight, Settings, Shield, HelpCircle, ArrowRight } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, User, LogOut, Mail, History, Settings, Shield, HelpCircle, ArrowRight, ShoppingBag, ShieldCheck } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { useAuth } from "@/lib/auth";
+import { dbClient } from "@/lib/db-client";
 import TransactionsList from "@/components/TransactionsList";
+import SalesList from "@/components/SalesList";
 
 export default function MorePage() {
   const router = useRouter();
   const { user, loading: authLoading, logout } = useAuth();
   const [showTransactions, setShowTransactions] = useState(false);
+  const [showSales, setShowSales] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
       router.push("/login");
     }
   }, [user, authLoading, router]);
+
+  useEffect(() => {
+    if (!user) return;
+    dbClient.getAdminMe().then((r) => setIsAdmin(r.isAdmin));
+  }, [user]);
 
   if (authLoading) {
     return (
@@ -35,6 +45,12 @@ export default function MorePage() {
 
   const menuItems = [
     { id: "transactions", label: "Transaction History", icon: History, color: "text-slate-900 dark:text-white", onClick: () => setShowTransactions(true) },
+    ...(isAdmin
+      ? [
+          { id: "sales", label: "Sales / Orders", icon: ShoppingBag, color: "text-slate-900 dark:text-white", onClick: () => setShowSales(true) },
+          { id: "admin", label: "Admin Dashboard", icon: ShieldCheck, color: "text-slate-900 dark:text-white", href: "/admin" as const },
+        ]
+      : []),
     { id: "security", label: "Security & Privacy", icon: Shield, color: "text-slate-900 dark:text-white" },
     { id: "settings", label: "App Settings", icon: Settings, color: "text-slate-900 dark:text-white" },
     { id: "support", label: "Help & Support", icon: HelpCircle, color: "text-slate-900 dark:text-white" },
@@ -47,13 +63,17 @@ export default function MorePage() {
         {/* Navigation Header */}
         <div className="flex items-center justify-between mb-10 px-2">
           <button
-            onClick={() => showTransactions ? setShowTransactions(false) : router.push("/")}
+            onClick={() => {
+              if (showTransactions) setShowTransactions(false);
+              else if (showSales) setShowSales(false);
+              else router.back();
+            }}
             className="w-10 h-10 flex items-center justify-center bg-slate-50 dark:bg-slate-900 rounded-full border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
           <h1 className="text-sm font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500">
-            {showTransactions ? "History" : "Account"}
+            {showTransactions ? "History" : showSales ? "Sales" : "Account"}
           </h1>
           <div className="w-10"></div>
         </div>
@@ -61,6 +81,10 @@ export default function MorePage() {
         {showTransactions ? (
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
             <TransactionsList />
+          </div>
+        ) : showSales ? (
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+            <SalesList />
           </div>
         ) : (
           <div className="space-y-10 animate-in fade-in duration-700">
@@ -94,21 +118,39 @@ export default function MorePage() {
               </div>
 
               <div className="grid gap-2">
-                {menuItems.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={item.onClick}
-                    className="w-full group flex items-center justify-between px-6 py-5 bg-white dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-900 rounded-3xl border border-transparent hover:border-slate-100 dark:hover:border-slate-800 transition-all"
-                  >
-                    <div className="flex items-center gap-5">
-                      <div className="w-5 h-5 flex items-center justify-center text-slate-400 dark:text-slate-500 group-hover:text-indigo-500 transition-colors">
-                        <item.icon className="h-5 w-5" />
+                {menuItems.map((item) => {
+                  const content = (
+                    <>
+                      <div className="flex items-center gap-5">
+                        <div className="w-5 h-5 flex items-center justify-center text-slate-400 dark:text-slate-500 group-hover:text-indigo-500 transition-colors">
+                          <item.icon className="h-5 w-5" />
+                        </div>
+                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{item.label}</span>
                       </div>
-                      <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{item.label}</span>
-                    </div>
-                    <ArrowRight className="h-4 w-4 text-slate-300 transform -translate-x-2 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all" />
-                  </button>
-                ))}
+                      <ArrowRight className="h-4 w-4 text-slate-300 transform -translate-x-2 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all" />
+                    </>
+                  );
+                  if ("href" in item && item.href) {
+                    return (
+                      <Link
+                        key={item.id}
+                        href={item.href}
+                        className="w-full group flex items-center justify-between px-6 py-5 bg-white dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-900 rounded-3xl border border-transparent hover:border-slate-100 dark:hover:border-slate-800 transition-all"
+                      >
+                        {content}
+                      </Link>
+                    );
+                  }
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={item.onClick}
+                      className="w-full group flex items-center justify-between px-6 py-5 bg-white dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-900 rounded-3xl border border-transparent hover:border-slate-100 dark:hover:border-slate-800 transition-all"
+                    >
+                      {content}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
