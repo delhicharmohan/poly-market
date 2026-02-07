@@ -51,10 +51,9 @@ export async function GET(
     });
 
     const filename = `invoice-${row.invoiceNumber}.pdf`;
-    const body =
-      pdfBuffer.buffer.byteLength === pdfBuffer.byteLength
-        ? pdfBuffer.buffer
-        : pdfBuffer.buffer.slice(pdfBuffer.byteOffset, pdfBuffer.byteOffset + pdfBuffer.byteLength);
+    // Copy into a new ArrayBuffer so NextResponse accepts it (BodyInit requires ArrayBuffer, not ArrayBufferLike)
+    const body = new ArrayBuffer(pdfBuffer.byteLength);
+    new Uint8Array(body).set(pdfBuffer);
     return new NextResponse(body, {
       status: 200,
       headers: {
