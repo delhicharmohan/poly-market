@@ -5,6 +5,7 @@ services:
     env: node
     plan: free
     buildCommand: npm install && npm run build
+    releaseCommand: npm run db:migrate-pending-payments
     startCommand: npm run db:init && npm run start
     healthCheckPath: /
     envVars:

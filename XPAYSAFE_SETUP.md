@@ -80,6 +80,20 @@ Common causes:
 
 In development, the full xpaysafe error body is logged to the server console (`[xpaysafe] payin error response:`). Use that to see which field failed.
 
+### `relation "pending_payments" does not exist` (500 on `/api/payments/initiate`)
+
+The database is missing the `pending_payments` table. On **Render**, the `render.yaml` release command runs `npm run db:migrate-pending-payments` on each deploy, which creates the table. Redeploy the service so the migration runs. If you deploy without `render.yaml`, run the migration once manually:
+
+```bash
+DATABASE_URL="your-render-database-url" node scripts/run-add-pending-payments-table.js
+```
+
+Or run `scripts/add-pending-payments-table.sql` in your DB client (e.g. Render Postgres shell).
+
+### Cross-Origin-Opener-Policy (COOP) console warnings
+
+If you see "Cross-Origin-Opener-Policy policy would block the window.closed call" in the browser console, it usually comes from the **payment gateway’s page** (after redirect) or a script there, not from this app. This app uses a full-page redirect (`window.location.href`) to the payment URL, not a popup. The warnings are often harmless and do not stop the payment from completing.
+
 ---
 
 ## 6. Optional: payment success page

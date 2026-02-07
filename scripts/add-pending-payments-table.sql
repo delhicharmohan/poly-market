@@ -1,4 +1,5 @@
 -- Pending payments (xpaysafe payin) – completed when webhook reports SUCCESS
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE IF NOT EXISTS pending_payments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     order_id VARCHAR(64) UNIQUE NOT NULL,
