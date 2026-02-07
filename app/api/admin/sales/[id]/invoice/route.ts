@@ -51,7 +51,11 @@ export async function GET(
     });
 
     const filename = `invoice-${row.invoiceNumber}.pdf`;
-    return new NextResponse(pdfBuffer, {
+    const body =
+      pdfBuffer.buffer.byteLength === pdfBuffer.byteLength
+        ? pdfBuffer.buffer
+        : pdfBuffer.buffer.slice(pdfBuffer.byteOffset, pdfBuffer.byteOffset + pdfBuffer.byteLength);
+    return new NextResponse(body, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",

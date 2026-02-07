@@ -14,7 +14,8 @@
     "db:init": "node scripts/db-init.js",
     "db:backup": "docker-compose exec postgres pg_dump -U indimarket indimarket > backup-$(date +%Y%m%d-%H%M%S).sql",
     "db:reset": "docker-compose down -v && docker-compose up -d postgres",
-    "db:migrate-sales": "node scripts/run-add-sales-table.js"
+    "db:migrate-sales": "node scripts/run-add-sales-table.js",
+    "db:migrate-pending-payments": "node scripts/run-add-pending-payments-table.js"
   },
   "dependencies": {
     "@types/pg": "^8.16.0",

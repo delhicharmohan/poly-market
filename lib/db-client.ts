@@ -228,6 +228,54 @@ export class DatabaseClient {
     }
   }
 
+  /** Initiate payment via xpaysafe; returns URLs for desktop (paymentLink) and mobile (upiLink). */
+  async initiatePayment(params: {
+    paintingId: string;
+    paintingName: string;
+    paintingImageUrl?: string;
+    amountInr: number;
+  }): Promise<{
+    redirectUrl: string;
+    paymentLink?: string;
+    upiLink?: string;
+    transactionId?: string;
+    orderId: string;
+  }> {
+    const response = await axios.post(
+      "/api/payments/initiate",
+      params,
+      { headers: this.getHeaders() }
+    );
+    const data = response.data;
+    if (!data.redirectUrl && !data.paymentLink && !data.upiLink) {
+      throw new Error(data.message || "Failed to get payment URL");
+    }
+    return {
+      redirectUrl: data.redirectUrl || data.paymentLink || data.upiLink,
+      paymentLink: data.paymentLink,
+      upiLink: data.upiLink,
+      transactionId: data.transactionId,
+      orderId: data.orderId,
+    };
+  }
+
+  /** Initiate payout (withdrawal) via xpaysafe to beneficiary bank account. */
+  async initiatePayout(params: {
+    amount: number;
+    accountNumber: string;
+    ifsc: string;
+    bankName?: string;
+    beneficiaryName: string;
+  }): Promise<{ success: boolean; orderId: string; balance: number; message?: string }> {
+    const response = await axios.post(
+      "/api/payments/payout",
+      params,
+      { headers: this.getHeaders() }
+    );
+    return response.data;
+  }
+
+  /** Legacy: direct purchase without payment gateway (used if gateway is disabled). */
   async purchasePainting(params: {
     paintingId: string;
     paintingName: string;

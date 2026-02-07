@@ -17,7 +17,7 @@ interface Painting {
   category: string;
 }
 
-const MIN_AMOUNT = 100;
+const MIN_AMOUNT = 10;
 const MAX_AMOUNT = 100000;
 
 const PAINTING_NAMES = [
@@ -77,7 +77,7 @@ export default function MerchandisePage() {
     }
   }, [searchParams]);
 
-  // All paintings shown are priced exactly at the amount entered (Rs. 100 – Rs. 1,00,000)
+  // All paintings shown are priced exactly at the amount entered (Rs. 10 – Rs. 1,00,000)
   const availablePaintings = useMemo(() => {
     if (!depositAmount || depositAmount < MIN_AMOUNT || depositAmount > MAX_AMOUNT) {
       return [];
@@ -191,22 +191,23 @@ export default function MerchandisePage() {
                           setPurchaseError(null);
                           setPurchasingId(painting.id);
                           try {
-                            await dbClient.purchasePainting({
+                            const { paymentLink, upiLink, redirectUrl } = await dbClient.initiatePayment({
                               paintingId: painting.id,
                               paintingName: painting.name,
                               paintingImageUrl: painting.image,
                               amountInr: painting.price,
                             });
                             setPurchasingId(null);
-                            await wallet.getBalance(true);
-                            router.push("/wallet");
+                            const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+                            const url = isMobile && upiLink ? upiLink : (paymentLink || redirectUrl);
+                            window.location.href = url;
                           } catch (e: any) {
                             setPurchasingId(null);
-                            setPurchaseError(e?.message || "Purchase failed. Please try again.");
+                            setPurchaseError(e?.message || "Payment could not be started. Please try again.");
                           }
                         }}
                       >
-                        {purchasingId === painting.id ? "Processing…" : "Buy Now"}
+                        {purchasingId === painting.id ? "Redirecting to payment…" : "Buy Now"}
                       </button>
                     </div>
                   </div>
@@ -218,7 +219,7 @@ export default function MerchandisePage() {
           <div className="text-center py-12">
             <ShoppingBag className="h-16 w-16 text-slate-400 dark:text-slate-600 mx-auto mb-4" />
             <p className="text-slate-600 dark:text-slate-400">
-              Amount must be between Rs. 100 and Rs. 1,00,000. Enter an amount in the wallet to see paintings at that price.
+              Amount must be between Rs. 10 and Rs. 1,00,000. Enter an amount in the wallet to see paintings at that price.
             </p>
           </div>
         ) : null}
