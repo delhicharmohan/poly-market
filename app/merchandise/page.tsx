@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { Suspense, useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Coins, ShoppingBag } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
@@ -56,7 +56,7 @@ function formatINR(amount: number): string {
   return `₹${amount >= 1000 ? amount.toLocaleString("en-IN") : amount.toFixed(2)}`;
 }
 
-export default function MerchandisePage() {
+function MerchandiseContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
@@ -261,5 +261,19 @@ export default function MerchandisePage() {
 
       <BottomNav />
     </div>
+  );
+}
+
+export default function MerchandisePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 dark:border-indigo-900 border-t-indigo-600" />
+        </div>
+      }
+    >
+      <MerchandiseContent />
+    </Suspense>
   );
 }
