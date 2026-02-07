@@ -93,6 +93,10 @@ export interface PayinResponse {
   transactionId?: string;
   status?: string;
   redirectUrl?: string;
+  /** Normalized from API (payment_link / redirect_url). */
+  paymentLink?: string;
+  /** From API data.raw_response.data.upi_link. */
+  upiLink?: string;
   /** Postman example: redirectUrl can be inside data.redirect_url or data.raw_response.data.payment_link / upi_link */
   data?: {
     redirect_url?: string;
