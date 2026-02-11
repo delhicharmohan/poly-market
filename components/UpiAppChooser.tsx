@@ -12,22 +12,19 @@ interface UpiApp {
     name: string;
     scheme: string;
     color: string;
-    iconText: string;
+    logo: string;
 }
 
 const UPI_APPS: UpiApp[] = [
-    { name: "PhonePe", scheme: "phonepe://pay", color: "bg-[#5f259f]", iconText: "PP" },
-    { name: "Google Pay", scheme: "tez://pay", color: "bg-[#4285F4]", iconText: "GP" },
-    { name: "Paytm", scheme: "paytmmp://pay", color: "bg-[#00baf2]", iconText: "Py" },
-    { name: "BHIM", scheme: "bhim://pay", color: "bg-[#e57d24]", iconText: "BH" },
+    { name: "PhonePe", scheme: "phonepe://pay", color: "bg-[#5f259f]", logo: "/images/PhonePe_Logo.svg.png" },
+    { name: "Google Pay", scheme: "tez://pay", color: "bg-white", logo: "/images/Google_Pay_Logo.png" },
+    { name: "Paytm", scheme: "paytmmp://pay", color: "bg-[#00baf2]", logo: "/images/Paytm_Logo_(standalone).png" },
 ];
 
 export default function UpiAppChooser({ upiLink, onClose }: UpiAppChooserProps) {
     const [copied, setCopied] = useState(false);
 
     const getDeepLink = (scheme: string) => {
-        // upiLink is typically "upi://pay?pa=...&pn=...&am=...&cu=INR"
-        // To target specific apps, replace "upi://pay" with the app scheme
         return upiLink.replace(/^upi:\/\/pay/i, scheme);
     };
 
@@ -39,10 +36,6 @@ export default function UpiAppChooser({ upiLink, onClose }: UpiAppChooserProps) 
 
     const handleAppClick = (scheme: string) => {
         window.location.href = getDeepLink(scheme);
-    };
-
-    const handleGenericPay = () => {
-        window.location.href = upiLink;
     };
 
     return (
@@ -71,25 +64,31 @@ export default function UpiAppChooser({ upiLink, onClose }: UpiAppChooserProps) 
 
                 {/* Content */}
                 <div className="p-6">
-                    <div className="grid grid-cols-2 gap-4 mb-8">
+                    <div className="grid grid-cols-1 gap-4 mb-8">
                         {UPI_APPS.map((app) => (
                             <button
                                 key={app.name}
                                 onClick={() => handleAppClick(app.scheme)}
-                                className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-100 dark:border-slate-700/50 transition-all active:scale-95 group"
+                                className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-100 dark:border-slate-700/50 transition-all active:scale-[0.98] group relative overflow-hidden"
                             >
-                                <div className={`${app.color} w-14 h-14 rounded-2xl flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-black/10 transition-transform group-hover:scale-110`}>
-                                    {app.iconText}
+                                <div className={`${app.color} w-16 h-12 rounded-xl flex items-center justify-center p-2 shadow-sm transition-transform group-hover:scale-105 overflow-hidden border border-slate-200 dark:border-slate-700`}>
+                                    <img src={app.logo} alt={app.name} className="max-w-full max-h-full object-contain" />
                                 </div>
-                                <span className="font-semibold text-slate-900 dark:text-white text-sm">{app.name}</span>
+                                <div className="flex-1 text-left">
+                                    <span className="font-bold text-slate-900 dark:text-white text-lg block">{app.name}</span>
+                                    <span className="text-xs text-slate-400 dark:text-slate-500">Pay securely with {app.name}</span>
+                                </div>
+                                <div className="bg-indigo-50 dark:bg-indigo-900/40 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <ExternalLink className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                                </div>
                             </button>
                         ))}
                     </div>
 
                     <div className="space-y-4">
                         <button
-                            onClick={handleGenericPay}
-                            className="w-full flex items-center justify-center gap-2 py-4 px-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-lg shadow-xl shadow-indigo-200 dark:shadow-none transition-all active:scale-[0.98]"
+                            onClick={() => window.location.href = upiLink}
+                            className="w-full flex items-center justify-center gap-2 py-4 px-6 border-2 border-indigo-600/20 dark:border-indigo-400/20 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-2xl font-bold text-lg transition-all active:scale-[0.98]"
                         >
                             Other UPI Apps
                             <ExternalLink className="w-5 h-5 opacity-70" />
@@ -101,7 +100,7 @@ export default function UpiAppChooser({ upiLink, onClose }: UpiAppChooserProps) 
                                 className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-medium text-sm transition-colors hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-[0.98]"
                             >
                                 {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
-                                {copied ? "Copied!" : "Copy UPI Link"}
+                                {copied ? "UPI Link Copied!" : "Copy URL"}
                             </button>
                         </div>
                     </div>
