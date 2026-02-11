@@ -1,11 +1,11 @@
 {
   "name": "Indimarket Prediction Network",
   "short_name": "Indimarket",
-  "description": "Merchant platform for Indimarket prediction markets",
+  "description": "Premium Merchant Platform for Indimarket Prediction Markets",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#a78bfa",
-  "theme_color": "#a78bfa",
+  "background_color": "#4f46e5",
+  "theme_color": "#4f46e5",
   "orientation": "portrait-primary",
   "icons": [
     {
@@ -20,6 +20,16 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
+  ],
+  "categories": [
+    "finance",
+    "business"
+  ],
+  "shortcuts": [
+    {
+      "name": "Merchandise",
+      "url": "/merchandise",
+      "description": "View and buy merchandise"
+    }
   ]
 }
-
