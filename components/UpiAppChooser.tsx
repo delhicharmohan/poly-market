@@ -27,8 +27,8 @@ export default function UpiAppChooser({ upiLink, onClose }: UpiAppChooserProps) 
 
     const getDeepLink = (scheme: string) => {
         // upiLink is typically "upi://pay?pa=...&pn=...&am=...&cu=INR"
-        // To target specific apps, replace "upi://" with the app scheme
-        return upiLink.replace(/^upi:\/\//i, scheme);
+        // To target specific apps, replace "upi://pay" with the app scheme
+        return upiLink.replace(/^upi:\/\/pay/i, scheme);
     };
 
     const handleCopy = () => {
