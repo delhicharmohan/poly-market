@@ -78,44 +78,29 @@ export default function MarketCard({ market, onPlaceWager }: MarketCardProps) {
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm hover:shadow-xl transition-all duration-500 border border-slate-200 dark:border-slate-700 overflow-hidden h-full flex flex-col group touch-manipulation">
       <div className="p-4 sm:p-5 flex flex-col flex-grow relative z-10">
-        {/* Header with Title and Thumbnail */}
-        <div className="flex justify-between items-start gap-4 mb-4">
-          <div className="flex-grow">
-            <div className="flex items-center gap-2 mb-2">
-              {/* Category Tag */}
-              <div className="inline-block px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border border-slate-200 dark:border-slate-600">
-                {market.category}
+        {/* Header with Title */}
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            {/* Category Tag */}
+            <div className="inline-block px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border border-slate-200 dark:border-slate-600">
+              {market.category}
+            </div>
+
+            {/* Live Badge */}
+            {isOpen && (
+              <div className="flex items-center space-x-1 px-1.5 py-0.5 bg-red-100 dark:bg-red-900/30 rounded border border-red-200 dark:border-red-800/50">
+                <span className="flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500"></span>
+                </span>
+                <span className="text-[8px] font-bold text-red-600 dark:text-red-400 uppercase tracking-tighter">LIVE</span>
               </div>
-
-              {/* Live Badge - Moved here for clarity */}
-              {isOpen && (
-                <div className="flex items-center space-x-1 px-1.5 py-0.5 bg-red-100 dark:bg-red-900/30 rounded border border-red-200 dark:border-red-800/50">
-                  <span className="flex h-1.5 w-1.5">
-                    <span className="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-red-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500"></span>
-                  </span>
-                  <span className="text-[8px] font-bold text-red-600 dark:text-red-400 uppercase tracking-tighter">LIVE</span>
-                </div>
-              )}
-            </div>
-
-            <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-tight line-clamp-2">
-              {market.title}
-            </h3>
+            )}
           </div>
 
-          {/* Small Thumbnail */}
-          <div className="relative flex-shrink-0">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm bg-slate-50 dark:bg-slate-900">
-              <img
-                src={imgError ? "https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?auto=format&fit=crop&q=80&w=800" : marketImage}
-                alt={market.title}
-                loading="lazy"
-                onError={() => setImgError(true)}
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-              />
-            </div>
-          </div>
+          <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-tight">
+            {market.title}
+          </h3>
         </div>
 
 
