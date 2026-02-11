@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { Home, Search, TrendingUp, Wallet } from "lucide-react";
+import { Home, History, TrendingUp, Wallet } from "lucide-react";
 
 export default function BottomNav() {
   const pathname = usePathname();
@@ -15,10 +15,10 @@ export default function BottomNav() {
       active: pathname === "/",
     },
     {
-      href: "/search",
-      label: "Search",
-      icon: Search,
-      active: pathname === "/search",
+      href: "/transactions",
+      label: "History",
+      icon: History,
+      active: pathname === "/transactions",
     },
     {
       href: "/breaking",
@@ -46,25 +46,22 @@ export default function BottomNav() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex flex-col items-center justify-center flex-1 py-2 px-2 rounded-lg transition-all duration-200 ${
-                  isActive
+                className={`flex flex-col items-center justify-center flex-1 py-2 px-2 rounded-lg transition-all duration-200 ${isActive
                     ? "bg-slate-700 dark:bg-slate-700"
                     : "hover:bg-slate-700/50 dark:hover:bg-slate-700/50"
-                }`}
+                  }`}
               >
                 <Icon
-                  className={`h-6 w-6 mb-1 ${
-                    isActive
+                  className={`h-6 w-6 mb-1 ${isActive
                       ? "text-white"
                       : "text-slate-400 dark:text-slate-500"
-                  }`}
+                    }`}
                 />
                 <span
-                  className={`text-xs font-medium ${
-                    isActive
+                  className={`text-xs font-medium ${isActive
                       ? "text-white"
                       : "text-slate-400 dark:text-slate-500"
-                  }`}
+                    }`}
                 >
                   {item.label}
                 </span>

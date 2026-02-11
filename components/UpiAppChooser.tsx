@@ -16,9 +16,9 @@ interface UpiApp {
 }
 
 const UPI_APPS: UpiApp[] = [
-    { name: "PhonePe", scheme: "phonepe://pay", color: "bg-[#5f259f]", logo: "/images/PhonePe_Logo.svg.png" },
+    { name: "PhonePe", scheme: "phonepe://pay", color: "bg-white", logo: "/images/PhonePe_Logo.svg.png" },
     { name: "Google Pay", scheme: "tez://upi/pay", color: "bg-white", logo: "/images/Google_Pay_Logo.png" },
-    { name: "Paytm", scheme: "paytmmp://pay", color: "bg-[#00baf2]", logo: "/images/Paytm_Logo_(standalone).png" },
+    { name: "Paytm", scheme: "paytmmp://pay", color: "bg-white", logo: "/images/Paytm_Logo_(standalone).png" },
 ];
 
 export default function UpiAppChooser({ upiLink, onClose }: UpiAppChooserProps) {

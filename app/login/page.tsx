@@ -249,10 +249,10 @@ export default function LoginPage() {
         </div>
 
         {/* Bottom Security Note */}
-        <div className="mt-10 flex items-center justify-center gap-2 text-slate-400 dark:text-slate-600">
-          <span className="text-[10px] font-black uppercase tracking-[0.2em]">End-to-End Encrypted</span>
-          <span className="w-1 h-1 bg-slate-400 dark:bg-slate-600 rounded-full"></span>
-          <span className="text-[10px] font-black uppercase tracking-[0.2em]">Indimarket Network</span>
+        <div className="mt-10 flex items-center justify-center gap-4 text-slate-400 dark:text-slate-600">
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap">End-to-End Encrypted</span>
+          <div className="w-1 h-1 bg-slate-400 dark:bg-slate-600 rounded-full flex-shrink-0"></div>
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Indimarket Network</span>
         </div>
       </div>
     </div>
