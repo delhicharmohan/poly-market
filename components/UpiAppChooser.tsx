@@ -17,7 +17,7 @@ interface UpiApp {
 
 const UPI_APPS: UpiApp[] = [
     { name: "PhonePe", scheme: "phonepe://pay", color: "bg-[#5f259f]", logo: "/images/PhonePe_Logo.svg.png" },
-    { name: "Google Pay", scheme: "tez://pay", color: "bg-white", logo: "/images/Google_Pay_Logo.png" },
+    { name: "Google Pay", scheme: "tez://upi/pay", color: "bg-white", logo: "/images/Google_Pay_Logo.png" },
     { name: "Paytm", scheme: "paytmmp://pay", color: "bg-[#00baf2]", logo: "/images/Paytm_Logo_(standalone).png" },
 ];
 
@@ -25,7 +25,19 @@ export default function UpiAppChooser({ upiLink, onClose }: UpiAppChooserProps) 
     const [copied, setCopied] = useState(false);
 
     const getDeepLink = (scheme: string) => {
-        return upiLink.replace(/^upi:\/\/pay/i, scheme);
+        // GPay and others are strict about am=XXXX.YY format (2 decimal places)
+        // Ensure the upiLink has 2 decimals for the AM parameter
+        let normalizedLink = upiLink;
+        const amMatch = upiLink.match(/[&?]am=([^&]+)/);
+        if (amMatch) {
+            const val = parseFloat(amMatch[1]);
+            if (!isNaN(val)) {
+                const normalizedAm = val.toFixed(2);
+                normalizedLink = upiLink.replace(`am=${amMatch[1]}`, `am=${normalizedAm}`);
+            }
+        }
+
+        return normalizedLink.replace(/^upi:\/\/pay/i, scheme);
     };
 
     const handleCopy = () => {
