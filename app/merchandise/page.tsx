@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Coins, ShoppingBag } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
+import UpiAppChooser from "@/components/UpiAppChooser";
 import { useAuth } from "@/lib/auth";
 import { dbClient } from "@/lib/db-client";
 import { wallet } from "@/lib/wallet";
@@ -63,6 +64,7 @@ function MerchandiseContent() {
   const [depositAmount, setDepositAmount] = useState<number>(0);
   const [purchasingId, setPurchasingId] = useState<string | null>(null);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
+  const [activeUpiLink, setActiveUpiLink] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -199,8 +201,13 @@ function MerchandiseContent() {
                             });
                             setPurchasingId(null);
                             const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
-                            const url = isMobile && upiLink ? upiLink : (paymentLink || redirectUrl);
-                            window.location.href = url;
+
+                            if (isMobile && upiLink) {
+                              setActiveUpiLink(upiLink);
+                            } else {
+                              const url = paymentLink || redirectUrl || upiLink;
+                              if (url) window.location.href = url;
+                            }
                           } catch (e: any) {
                             setPurchasingId(null);
                             setPurchaseError(e?.message || "Payment could not be started. Please try again.");
@@ -259,6 +266,12 @@ function MerchandiseContent() {
         )}
       </div>
 
+      {activeUpiLink && (
+        <UpiAppChooser
+          upiLink={activeUpiLink}
+          onClose={() => setActiveUpiLink(null)}
+        />
+      )}
       <BottomNav />
     </div>
   );

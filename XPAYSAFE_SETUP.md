@@ -90,6 +90,30 @@ DATABASE_URL="your-render-database-url" node scripts/run-add-pending-payments-ta
 
 Or run `scripts/add-pending-payments-table.sql` in your DB client (e.g. Render Postgres shell).
 
+### "IP address not whitelisted" (403 from xpaysafe)
+
+xpaysafe rejects API requests when the **server’s outbound IP** is not in their whitelist. When your app runs on **Render**, xpaysafe sees Render’s IP, not the user’s.
+
+**Fix:**
+
+1. **Get your Render service outbound IP**
+   - In Render Dashboard → your **Web Service** (e.g. poly-market) → **Shell** tab, run:
+     ```bash
+     curl -s https://api.ipify.org
+     ```
+   - Or add a temporary API route that returns the server’s public IP (e.g. by calling an external “what’s my IP” API from the server), hit it once, then remove it.
+   - On free tier, Render’s outbound IP can change between deploys; you may need to re-whitelist after redeploys or use a [static outbound IP](https://render.com/docs/static-outbound-ip-addresses) if available for your plan.
+
+2. **Whitelist that IP in xpaysafe**
+   - Log in to the **xpaysafe merchant dashboard**.
+   - Find **API settings** / **IP whitelist** (or similar).
+   - Add the IP (or range) from step 1 and save.
+
+3. **Alternative**
+   - If xpaysafe allows it, you can disable IP whitelisting for your account so any server IP can call the API (less restrictive; use only if acceptable for your security policy).
+
+After whitelisting (or disabling the check), Payin requests from your Render app should succeed.
+
 ### Cross-Origin-Opener-Policy (COOP) console warnings
 
 If you see "Cross-Origin-Opener-Policy policy would block the window.closed call" in the browser console, it usually comes from the **payment gateway’s page** (after redirect) or a script there, not from this app. This app uses a full-page redirect (`window.location.href`) to the payment URL, not a popup. The warnings are often harmless and do not stop the payment from completing.
