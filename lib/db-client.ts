@@ -8,7 +8,7 @@ export class DatabaseClient {
     // Get Firebase user ID from localStorage or context
     // For now, we'll use a simple approach - in production, get from auth context
     if (typeof window === "undefined") return null;
-    
+
     // Try to get from a stored session
     const userId = sessionStorage.getItem("firebase_uid");
     return userId;
@@ -180,6 +180,7 @@ export class DatabaseClient {
       firebaseUid: string;
       email: string;
       displayName: string | null;
+      isBlocked: boolean;
       balance: number;
       createdAt: string;
     }[]
@@ -192,6 +193,49 @@ export class DatabaseClient {
     } catch (error) {
       console.error("Failed to fetch admin users:", error);
       return [];
+    }
+  }
+
+  /** Admin only. Add a new user manually. */
+  async addUser(email: string, displayName?: string): Promise<{ success: boolean; user?: any; message?: string }> {
+    try {
+      const response = await axios.post(
+        "/api/admin/users",
+        { email, displayName },
+        { headers: this.getHeaders() }
+      );
+      return response.data;
+    } catch (error: any) {
+      const msg = error.response?.data?.message || "Failed to add user";
+      return { success: false, message: msg };
+    }
+  }
+
+  /** Admin only. Delete a user by ID. */
+  async deleteUser(id: string): Promise<{ success: boolean; message?: string }> {
+    try {
+      const response = await axios.delete(`/api/admin/users/${id}`, {
+        headers: this.getHeaders(),
+      });
+      return response.data;
+    } catch (error: any) {
+      const msg = error.response?.data?.message || "Failed to delete user";
+      return { success: false, message: msg };
+    }
+  }
+
+  /** Admin only. Block or unblock a user. */
+  async blockUser(id: string, blocked: boolean): Promise<{ success: boolean; message?: string }> {
+    try {
+      const response = await axios.patch(
+        `/api/admin/users/${id}/block`,
+        { blocked },
+        { headers: this.getHeaders() }
+      );
+      return response.data;
+    } catch (error: any) {
+      const msg = error.response?.data?.message || "Failed to update block status";
+      return { success: false, message: msg };
     }
   }
 

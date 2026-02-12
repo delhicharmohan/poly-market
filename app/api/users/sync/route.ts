@@ -24,9 +24,17 @@ export async function POST(request: NextRequest) {
          email = EXCLUDED.email,
          display_name = EXCLUDED.display_name,
          updated_at = CURRENT_TIMESTAMP
-       RETURNING id, firebase_uid, email, display_name, created_at`,
+       RETURNING id, firebase_uid, email, display_name, created_at, is_blocked`,
       [firebaseUid, email, displayName || null]
     );
+
+    // Prevent blocked users from accessing the platform
+    if (result.rows[0]?.is_blocked) {
+      return NextResponse.json(
+        { success: false, message: "Account blocked. Contact support." },
+        { status: 403 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
@@ -41,7 +49,7 @@ export async function POST(request: NextRequest) {
       constraint: error.constraint,
     });
     return NextResponse.json(
-      { 
+      {
         message: error.message || "Failed to sync user",
         error: process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
