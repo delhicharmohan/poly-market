@@ -239,6 +239,25 @@ export class DatabaseClient {
     }
   }
 
+  /** Admin only. Add or remove funds from a user's wallet. */
+  async adminAdjustBalance(
+    userId: string,
+    type: "deposit" | "withdraw",
+    amount: number
+  ): Promise<{ success: boolean; balance?: number; message?: string }> {
+    try {
+      const response = await axios.post(
+        `/api/admin/users/${userId}/balance`,
+        { type, amount },
+        { headers: this.getHeaders() }
+      );
+      return response.data;
+    } catch (error: any) {
+      const msg = error.response?.data?.message || "Failed to adjust balance";
+      return { success: false, message: msg };
+    }
+  }
+
   /** Admin only. Returns all transactions with user info. */
   async getAdminTransactions(): Promise<
     {
