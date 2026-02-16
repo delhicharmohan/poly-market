@@ -90,6 +90,90 @@ export async function POST(request: NextRequest) {
 
     const pool = getPool();
 
+    // ── PAYOUT callback (orderId starts with "PAYOUT-") ──
+    if (String(orderId).startsWith("PAYOUT-")) {
+      const payoutResult = await pool.query(
+        `SELECT id, user_id, amount_inr, wallet_transaction_id, status
+         FROM pending_payouts WHERE order_id = $1`,
+        [orderId]
+      );
+
+      if (payoutResult.rows.length === 0) {
+        return NextResponse.json(
+          { message: "Unknown payout orderId" },
+          { status: 404 }
+        );
+      }
+
+      const payout = payoutResult.rows[0];
+
+      if (payout.status !== "PENDING") {
+        return NextResponse.json({
+          success: true,
+          message: "Payout already processed",
+          orderId,
+        });
+      }
+
+      if (status === "SUCCESS") {
+        await pool.query(
+          `UPDATE pending_payouts SET status = 'SUCCESS', completed_at = CURRENT_TIMESTAMP WHERE order_id = $1`,
+          [orderId]
+        );
+        console.log(`[xpaysafe webhook] Payout ${orderId} completed successfully`);
+        return NextResponse.json({ success: true, orderId, message: "Payout confirmed" });
+      }
+
+      if (status === "FAILED" || status === "EXPIRED") {
+        // Idempotency: check if refund was already issued for this payout
+        const existingRefund = await pool.query(
+          `SELECT id FROM wallet_transactions WHERE description LIKE $1 AND type = 'deposit'`,
+          [`Payout ${status.toLowerCase()} – refund: ${orderId}`]
+        );
+        if (existingRefund.rows.length > 0) {
+          await pool.query(
+            `UPDATE pending_payouts SET status = $1, completed_at = CURRENT_TIMESTAMP WHERE order_id = $2`,
+            [status, orderId]
+          );
+          return NextResponse.json({ success: true, message: "Payout already refunded", orderId });
+        }
+
+        // Refund: credit the wallet with the payout amount
+        const userIdDb = payout.user_id;
+        const refundAmount = parseFloat(payout.amount_inr);
+
+        const balanceResult = await pool.query(
+          `SELECT COALESCE(SUM(amount), 0) as balance FROM wallet_transactions WHERE user_id = $1`,
+          [userIdDb]
+        );
+        const currentBalance = parseFloat(balanceResult.rows[0].balance) || 0;
+        const newBalance = currentBalance + refundAmount;
+
+        await pool.query(
+          `INSERT INTO wallet_transactions (user_id, type, amount, balance_after, description)
+           VALUES ($1, 'deposit', $2, $3, $4)`,
+          [userIdDb, refundAmount, newBalance, `Payout ${status.toLowerCase()} – refund: ${orderId}`]
+        );
+
+        await pool.query(
+          `UPDATE pending_payouts SET status = $1, completed_at = CURRENT_TIMESTAMP WHERE order_id = $2`,
+          [status, orderId]
+        );
+
+        console.log(`[xpaysafe webhook] Payout ${orderId} ${status} – refunded ${refundAmount} to user ${userIdDb}`);
+        return NextResponse.json({
+          success: true,
+          orderId,
+          message: `Payout ${status.toLowerCase()} – wallet refunded`,
+          refundedAmount: refundAmount,
+        });
+      }
+
+      // Other statuses (e.g. PROCESSING) – just acknowledge
+      return NextResponse.json({ success: true, orderId, message: `Payout status ${status} noted` });
+    }
+
+    // ── PAYIN callback (existing logic) ──
     const pendingResult = await pool.query(
       `SELECT id, user_id, painting_id, painting_name, painting_image_url, amount_inr, status
        FROM pending_payments WHERE order_id = $1`,

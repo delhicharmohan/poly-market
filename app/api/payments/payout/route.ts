@@ -65,11 +65,12 @@ export async function POST(request: NextRequest) {
 
     // Deduct from wallet first
     const newBalance = currentBalance - withdrawAmount;
-    await pool.query(
+    const wtResult = await pool.query(
       `INSERT INTO wallet_transactions (user_id, type, amount, balance_after, description)
-       VALUES ($1, 'withdraw', $2, $3, $4)`,
+       VALUES ($1, 'withdraw', $2, $3, $4) RETURNING id`,
       [userIdDb, -withdrawAmount, newBalance, `Withdrawal to bank: ${orderId}`]
     );
+    const walletTransactionId = wtResult.rows[0].id;
 
     // Call xpaysafe payout
     let payoutResponse;
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
         timestamp,
       });
     } catch (payoutError: any) {
-      // Reverse the wallet deduction if payout fails
+      // Reverse the wallet deduction if payout API call itself fails
       const revertBalance = newBalance + withdrawAmount;
       await pool.query(
         `INSERT INTO wallet_transactions (user_id, type, amount, balance_after, description)
@@ -96,6 +97,27 @@ export async function POST(request: NextRequest) {
         [userIdDb, withdrawAmount, revertBalance, `Payout failed – refund: ${orderId}`]
       );
       throw payoutError;
+    }
+
+    // Track payout in pending_payouts for webhook-driven status updates / refunds
+    try {
+      await pool.query(
+        `INSERT INTO pending_payouts (order_id, user_id, amount_inr, beneficiary_name, account_number, ifsc, gateway_transaction_id, wallet_transaction_id, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PENDING')`,
+        [
+          orderId,
+          userIdDb,
+          withdrawAmount,
+          beneficiaryName,
+          accountNumber,
+          ifsc,
+          payoutResponse.transactionId || null,
+          walletTransactionId,
+        ]
+      );
+    } catch (trackingError: any) {
+      // Non-fatal: payout was already sent to gateway, just log the tracking failure
+      console.error("[payout] Failed to insert pending_payouts record:", trackingError.message);
     }
 
     return NextResponse.json({
