@@ -141,7 +141,7 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
 
     const candleBuildersRef = useRef<Map<string, CandleBuilder>>(new Map());
     const binanceRef = useRef<BinanceWSManager | null>(null);
-    const twelveDataRef = useRef<TwelveDataWSManager | null>(null);
+    const twelveDataRefs = useRef<TwelveDataWSManager[]>([]);
 
     // Guard against React Strict Mode double-mount
     const mountedRef = useRef(false);
@@ -204,19 +204,19 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
             const tdKey = process.env.NEXT_PUBLIC_TWELVEDATA_API_KEY;
             
             if (tdAssets.length > 0 && tdKey) {
-                const tdSymbols = tdAssets.map(a => a.wsSymbol);
-                const tdWs = new TwelveDataWSManager(tdSymbols, tdKey);
-                
-                tdWs.onTick(handleTick);
-                tdWs.onStatusChange((status) => {
-                    tdAssets.forEach(asset => {
+                // Connect each Forex pair on its own WebSocket to satisfy Free Tier limits
+                tdAssets.forEach((asset, idx) => {
+                    const tdWs = new TwelveDataWSManager(asset.wsSymbol, tdKey);
+                    
+                    tdWs.onTick(handleTick);
+                    tdWs.onStatusChange((status) => {
                         dispatch({ type: 'SET_STATUS', symbol: asset.id, status });
                     });
+                    
+                    // Stagger connections
+                    setTimeout(() => tdWs.connect(), 1000 + (idx * 500));
+                    twelveDataRefs.current.push(tdWs);
                 });
-                
-                // Add staggered connection start for Twelve Data to avoid concurrent burst if needed
-                setTimeout(() => tdWs.connect(), 1000);
-                twelveDataRef.current = tdWs;
             }
         };
 
@@ -228,8 +228,8 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
             binanceRef.current?.disconnect();
             binanceRef.current = null;
             
-            twelveDataRef.current?.disconnect();
-            twelveDataRef.current = null;
+            twelveDataRefs.current.forEach(td => td.disconnect());
+            twelveDataRefs.current = [];
             
             candleBuildersRef.current.forEach(builder => builder.reset());
             candleBuildersRef.current.clear();
