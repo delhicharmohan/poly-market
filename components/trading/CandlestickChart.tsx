@@ -66,7 +66,7 @@ export default function CandlestickChart({
         if (!ctx) return;
         ctx.scale(dpr, dpr);
 
-        const PADDING = { top: 20, right: 70, bottom: 20, left: 10 };
+        const PADDING = { top: 20, right: 70, bottom: 24, left: 10 };
         const chartW = W - PADDING.left - PADDING.right;
         const chartH = H - PADDING.top - PADDING.bottom;
 
@@ -110,8 +110,13 @@ export default function CandlestickChart({
         const visible = pricePoints.slice(-maxPoints);
 
         const prices = visible.map(p => p.price);
-        const minP = Math.min(...prices) * 0.99995;
-        const maxP = Math.max(...prices) * 1.00005;
+        const rawMin = Math.min(...prices);
+        const rawMax = Math.max(...prices);
+        const rawRange = rawMax - rawMin || 1;
+        
+        // Add dynamic zoom padding (15% top/bottom) based on the current volatility
+        const minP = rawMin - rawRange * 0.15;
+        const maxP = rawMax + rawRange * 0.15;
         const range = maxP - minP || 1;
 
         const toX = (i: number) => PADDING.left + (i / (visible.length - 1)) * chartW;
@@ -136,6 +141,33 @@ export default function CandlestickChart({
                 W - PADDING.right + 6,
                 y + 3
             );
+        }
+
+        // X-axis grid lines & time labels (24 HR format)
+        ctx.fillStyle = '#64748b';
+        ctx.font = "10px 'JetBrains Mono', monospace";
+        ctx.textAlign = 'center';
+        for (let i = 0; i <= 4; i++) {
+            const idx = Math.floor((i / 4) * (visible.length - 1));
+            const point = visible[idx];
+            if (point) {
+                const x = toX(idx);
+                // Vertical grid line
+                ctx.beginPath();
+                ctx.moveTo(x, PADDING.top);
+                ctx.lineTo(x, PADDING.top + chartH);
+                ctx.stroke();
+
+                // 24 HR Time label
+                const date = new Date(point.time);
+                const timeStr = date.toLocaleTimeString('en-US', { 
+                    hour12: false, 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+                ctx.fillText(timeStr, x, H - 6);
+            }
         }
 
         // Determine trend color (comparing last price to first visible price)

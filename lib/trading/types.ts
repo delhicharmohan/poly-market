@@ -94,6 +94,26 @@ export const ASSETS: Asset[] = [
         volatility: 0.001,
         decimals: 2,
     },
+    {
+        id: 'EUR/USD',
+        label: 'EUR/USD',
+        provider: 'twelvedata',
+        wsSymbol: 'EUR/USD',
+        seedPrice: 1.0845,
+        color: '#EC4899', // Pink
+        volatility: 0.0005,
+        decimals: 5,
+    },
+    {
+        id: 'GBP/USD',
+        label: 'GBP/USD',
+        provider: 'twelvedata',
+        wsSymbol: 'GBP/USD',
+        seedPrice: 1.2643,
+        color: '#8B5CF6', // Purple
+        volatility: 0.0005,
+        decimals: 5,
+    },
 ];
 
 export const TIMEFRAMES: Timeframe[] = [

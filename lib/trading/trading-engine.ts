@@ -115,7 +115,10 @@ export function tradingReducer(state: TradingState, action: TradingAction): Trad
         case 'RESET_BALANCE':
             return {
                 ...initialTradingState,
-                balance: action.amount || INITIAL_BALANCE,
+                balance: action.amount !== undefined ? action.amount : INITIAL_BALANCE,
+                trades: state.trades, // Preserve active trades on balance reset
+                history: state.history, // Preserve history on balance reset
+                pnl: state.pnl, // Preserve P&L
             };
 
         default:

@@ -261,30 +261,35 @@ function DesktopTradingPanel({
     return (
         <div
             style={{
+                width: 280, // Fixed width for sidebar
                 background: 'rgba(12, 17, 32, 0.95)',
                 backdropFilter: 'blur(20px)',
                 WebkitBackdropFilter: 'blur(20px)',
-                borderTop: '1px solid rgba(59, 130, 246, 0.15)',
-                padding: '10px 16px 12px',
+                borderLeft: '1px solid rgba(59, 130, 246, 0.15)',
+                padding: '24px 16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 24, // Spacing between sections
                 flexShrink: 0,
+                overflowY: 'auto',
             }}
         >
-            {/* Row 1: Balance / PnL / Payout Info */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 10 }}>
+            {/* Top Stats Section */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {/* Balance */}
                 <div
                     style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 6,
+                        justifyContent: 'space-between',
                         background: 'rgba(15, 23, 42, 0.8)',
                         border: '1px solid #1e293b',
                         borderRadius: 8,
-                        padding: '6px 12px',
+                        padding: '12px',
                     }}
                 >
-                    <span style={{ fontSize: 9, color: '#64748b', letterSpacing: 1.2, fontWeight: 500 }}>BAL</span>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: '#e2e8f0' }}>
+                    <span style={{ fontSize: 10, color: '#64748b', letterSpacing: 1.2, fontWeight: 500 }}>BALANCE</span>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: '#e2e8f0' }}>
                         ${balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </span>
                 </div>
@@ -294,57 +299,31 @@ function DesktopTradingPanel({
                     style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 6,
+                        justifyContent: 'space-between',
                         background: pnl >= 0 ? 'rgba(0, 230, 118, 0.06)' : 'rgba(255, 23, 68, 0.06)',
                         border: `1px solid ${pnl >= 0 ? 'rgba(0, 230, 118, 0.15)' : 'rgba(255, 23, 68, 0.15)'}`,
                         borderRadius: 8,
-                        padding: '6px 12px',
+                        padding: '12px',
                     }}
                 >
-                    <span style={{ fontSize: 9, color: '#64748b', letterSpacing: 1.2, fontWeight: 500 }}>P&L</span>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: pnl >= 0 ? '#00E676' : '#FF1744' }}>
+                    <span style={{ fontSize: 10, color: '#64748b', letterSpacing: 1.2, fontWeight: 500 }}>PROFIT/LOSS</span>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: pnl >= 0 ? '#00E676' : '#FF1744' }}>
                         {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}
                     </span>
                 </div>
-
-                {/* Payout info */}
-                <div style={{ display: 'flex', gap: 12, marginLeft: 'auto', fontSize: 11, color: '#64748b' }}>
-                    <span>
-                        Profit <span style={{ color: '#00E676', fontWeight: 700 }}>+${(amount * 0.85).toFixed(2)}</span>
-                    </span>
-                    <span>
-                        Loss <span style={{ color: '#FF1744', fontWeight: 700 }}>-${amount.toFixed(2)}</span>
-                    </span>
-                </div>
-
-                {/* Demo badge */}
-                <span
-                    style={{
-                        background: '#0f1a2e',
-                        border: '1px solid #1e3a5f',
-                        borderRadius: 6,
-                        padding: '4px 10px',
-                        fontSize: 8,
-                        color: '#00E676',
-                        letterSpacing: 1,
-                        fontWeight: 600,
-                        whiteSpace: 'nowrap',
-                    }}
-                >
-                    ● DEMO
-                </span>
             </div>
 
-            {/* Row 2: Timeframes + Amount + Trade Buttons */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                {/* Timeframe pills */}
+            {/* Timeframe Section */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Timeframe</span>
                 <div
                     style={{
-                        display: 'flex',
-                        gap: 4,
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(4, 1fr)',
+                        gap: 6,
                         background: 'rgba(10, 14, 23, 0.8)',
                         borderRadius: 8,
-                        padding: 3,
+                        padding: 6,
                         border: '1px solid #1e293b',
                     }}
                 >
@@ -353,33 +332,38 @@ function DesktopTradingPanel({
                             key={tf.label}
                             onClick={() => onTimeframeChange(tf)}
                             style={{
-                                padding: '7px 12px',
+                                padding: '8px 0',
                                 fontSize: 11,
                                 fontWeight: 700,
-                                border: timeframe.label === tf.label ? '1px solid #3B82F6' : '1px solid transparent',
+                                border: 'none',
                                 borderRadius: 6,
                                 cursor: 'pointer',
                                 fontFamily: 'inherit',
                                 background: timeframe.label === tf.label ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
                                 color: timeframe.label === tf.label ? '#3B82F6' : '#64748b',
                                 transition: 'all .15s ease',
-                                whiteSpace: 'nowrap',
+                                textAlign: 'center',
                             }}
                         >
                             {tf.label}
                         </button>
                     ))}
                 </div>
+            </div>
 
-                {/* Amount controls */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            {/* Investment Amount Section */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Amount</span>
+                
+                {/* Preset Amounts */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
                     {[25, 50, 100, 500].map((v) => (
                         <button
                             key={v}
                             onClick={() => onAmountChange(Math.min(balance, v))}
                             style={{
-                                padding: '7px 10px',
-                                fontSize: 10,
+                                padding: '8px 0',
+                                fontSize: 11,
                                 fontWeight: 600,
                                 border: amount === v ? '1px solid #3B82F6' : '1px solid #1e293b',
                                 borderRadius: 6,
@@ -388,120 +372,150 @@ function DesktopTradingPanel({
                                 background: amount === v ? 'rgba(59, 130, 246, 0.12)' : 'rgba(10, 14, 23, 0.8)',
                                 color: amount === v ? '#3B82F6' : '#94a3b8',
                                 transition: 'all .15s ease',
-                                whiteSpace: 'nowrap',
                             }}
                         >
                             ${v}
                         </button>
                     ))}
-
-                    <div
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            background: 'rgba(10, 14, 23, 0.8)',
-                            borderRadius: 8,
-                            border: '1px solid #1e293b',
-                            overflow: 'hidden',
-                            marginLeft: 4,
-                        }}
-                    >
-                        <button
-                            onClick={() => onAmountChange(Math.max(10, amount - 10))}
-                            style={{
-                                width: 32,
-                                height: 36,
-                                border: 'none',
-                                background: 'transparent',
-                                color: '#64748b',
-                                fontSize: 15,
-                                cursor: 'pointer',
-                                fontFamily: 'inherit',
-                            }}
-                        >
-                            −
-                        </button>
-                        <input
-                            type="number"
-                            value={amount}
-                            onChange={(e) => onAmountChange(Math.max(1, parseInt(e.target.value) || 0))}
-                            style={{
-                                width: 60,
-                                textAlign: 'center',
-                                background: 'transparent',
-                                border: 'none',
-                                color: '#e2e8f0',
-                                fontSize: 14,
-                                fontWeight: 700,
-                                fontFamily: 'inherit',
-                                outline: 'none',
-                            }}
-                        />
-                        <button
-                            onClick={() => onAmountChange(Math.min(balance, amount + 10))}
-                            style={{
-                                width: 32,
-                                height: 36,
-                                border: 'none',
-                                background: 'transparent',
-                                color: '#64748b',
-                                fontSize: 15,
-                                cursor: 'pointer',
-                                fontFamily: 'inherit',
-                            }}
-                        >
-                            +
-                        </button>
-                    </div>
                 </div>
 
-                {/* Trade Buttons */}
-                <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+                {/* Manual Amount Input */}
+                <div
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        background: 'rgba(10, 14, 23, 0.8)',
+                        borderRadius: 8,
+                        border: '1px solid #1e293b',
+                        overflow: 'hidden',
+                        height: 48,
+                        marginTop: 4,
+                    }}
+                >
                     <button
-                        onClick={() => onTrade('up')}
-                        disabled={amount > balance}
+                        onClick={() => onAmountChange(Math.max(10, amount - 10))}
                         style={{
-                            padding: '12px 32px',
-                            fontSize: 14,
-                            fontWeight: 800,
+                            width: 48,
+                            height: '100%',
                             border: 'none',
-                            borderRadius: 10,
-                            cursor: amount > balance ? 'not-allowed' : 'pointer',
+                            background: 'transparent',
+                            color: '#64748b',
+                            fontSize: 18,
+                            cursor: 'pointer',
                             fontFamily: 'inherit',
-                            background: 'linear-gradient(135deg, #00C853, #00E676)',
-                            color: '#062e16',
-                            letterSpacing: 0.8,
-                            boxShadow: '0 4px 24px rgba(0,230,118,0.35)',
-                            opacity: amount > balance ? 0.4 : 1,
-                            transition: 'all .2s ease',
-                            whiteSpace: 'nowrap',
                         }}
                     >
-                        ▲ CALL
+                        −
                     </button>
-                    <button
-                        onClick={() => onTrade('down')}
-                        disabled={amount > balance}
+                    <input
+                        type="number"
+                        value={amount}
+                        onChange={(e) => onAmountChange(Math.max(1, parseInt(e.target.value) || 0))}
                         style={{
-                            padding: '12px 32px',
-                            fontSize: 14,
-                            fontWeight: 800,
+                            flex: 1,
+                            textAlign: 'center',
+                            background: 'transparent',
                             border: 'none',
-                            borderRadius: 10,
-                            cursor: amount > balance ? 'not-allowed' : 'pointer',
+                            color: '#e2e8f0',
+                            fontSize: 16,
+                            fontWeight: 700,
                             fontFamily: 'inherit',
-                            background: 'linear-gradient(135deg, #D50000, #FF1744)',
-                            color: '#fff',
-                            letterSpacing: 0.8,
-                            boxShadow: '0 4px 24px rgba(255,23,68,0.35)',
-                            opacity: amount > balance ? 0.4 : 1,
-                            transition: 'all .2s ease',
-                            whiteSpace: 'nowrap',
+                            outline: 'none',
+                            width: '100%',
+                        }}
+                    />
+                    <button
+                        onClick={() => onAmountChange(Math.min(balance, amount + 10))}
+                        style={{
+                            width: 48,
+                            height: '100%',
+                            border: 'none',
+                            background: 'transparent',
+                            color: '#64748b',
+                            fontSize: 18,
+                            cursor: 'pointer',
+                            fontFamily: 'inherit',
                         }}
                     >
-                        ▼ PUT
+                        +
                     </button>
                 </div>
+            </div>
+
+            {/* Payout Info */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b' }}>
+                <span>
+                    Profit: <span style={{ color: '#00E676', fontWeight: 700 }}>+${(amount * 0.85).toFixed(2)}</span>
+                </span>
+                <span>
+                    Loss: <span style={{ color: '#FF1744', fontWeight: 700 }}>-${amount.toFixed(2)}</span>
+                </span>
+            </div>
+
+            {/* Trade Buttons */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 'auto' }}>
+                <button
+                    onClick={() => onTrade('up')}
+                    disabled={amount > balance}
+                    style={{
+                        width: '100%',
+                        padding: '16px 0',
+                        fontSize: 16,
+                        fontWeight: 800,
+                        border: 'none',
+                        borderRadius: 10,
+                        cursor: amount > balance ? 'not-allowed' : 'pointer',
+                        fontFamily: 'inherit',
+                        background: 'linear-gradient(135deg, #00C853, #00E676)',
+                        color: '#062e16',
+                        letterSpacing: 0.8,
+                        boxShadow: '0 4px 24px rgba(0,230,118,0.3)',
+                        opacity: amount > balance ? 0.4 : 1,
+                        transition: 'all .2s ease',
+                    }}
+                >
+                    ▲ CALL
+                </button>
+                <button
+                    onClick={() => onTrade('down')}
+                    disabled={amount > balance}
+                    style={{
+                        width: '100%',
+                        padding: '16px 0',
+                        fontSize: 16,
+                        fontWeight: 800,
+                        border: 'none',
+                        borderRadius: 10,
+                        cursor: amount > balance ? 'not-allowed' : 'pointer',
+                        fontFamily: 'inherit',
+                        background: 'linear-gradient(135deg, #D50000, #FF1744)',
+                        color: '#fff',
+                        letterSpacing: 0.8,
+                        boxShadow: '0 4px 24px rgba(255,23,68,0.3)',
+                        opacity: amount > balance ? 0.4 : 1,
+                        transition: 'all .2s ease',
+                    }}
+                >
+                    ▼ PUT
+                </button>
+            </div>
+            
+            {/* Demo badge container */}
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
+                <span
+                    style={{
+                        background: '#0f1a2e',
+                        border: '1px solid #1e3a5f',
+                        borderRadius: 6,
+                        padding: '4px 12px',
+                        fontSize: 10,
+                        color: '#00E676',
+                        letterSpacing: 1,
+                        fontWeight: 600,
+                    }}
+                >
+                    ● DEMO MODE
+                </span>
             </div>
         </div>
     );

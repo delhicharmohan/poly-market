@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useRef, useCallback, useReducer } from 'react';
 import { AssetState, Candle, ConnectionStatus, Tick, ASSETS } from './types';
 import { BinanceWSManager } from './ws-binance';
+import { TwelveDataWSManager } from './ws-twelvedata';
 import { CandleBuilder } from './candle-builder';
 
 // ─── Binance REST API — fetch historical klines ───
@@ -140,6 +141,7 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
 
     const candleBuildersRef = useRef<Map<string, CandleBuilder>>(new Map());
     const binanceRef = useRef<BinanceWSManager | null>(null);
+    const twelveDataRef = useRef<TwelveDataWSManager | null>(null);
 
     // Guard against React Strict Mode double-mount
     const mountedRef = useRef(false);
@@ -183,16 +185,39 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
             console.log('[MarketData] Historical klines loaded for all assets');
 
             // Step 2: Connect Binance WebSocket for live ticks
-            const binanceSymbols = ASSETS.map(a => a.wsSymbol);
-            const binance = new BinanceWSManager(binanceSymbols);
-            binance.onTick(handleTick);
-            binance.onStatusChange((status) => {
-                ASSETS.forEach(asset => {
-                    dispatch({ type: 'SET_STATUS', symbol: asset.id, status });
+            const binanceAssets = ASSETS.filter(a => a.provider === 'binance');
+            if (binanceAssets.length > 0) {
+                const binanceSymbols = binanceAssets.map(a => a.wsSymbol);
+                const binance = new BinanceWSManager(binanceSymbols);
+                binance.onTick(handleTick);
+                binance.onStatusChange((status) => {
+                    binanceAssets.forEach(asset => {
+                        dispatch({ type: 'SET_STATUS', symbol: asset.id, status });
+                    });
                 });
-            });
-            binance.connect();
-            binanceRef.current = binance;
+                binance.connect();
+                binanceRef.current = binance;
+            }
+
+            // Step 3: Connect Twelve Data WebSocket for Forex
+            const tdAssets = ASSETS.filter(a => a.provider === 'twelvedata');
+            const tdKey = process.env.NEXT_PUBLIC_TWELVEDATA_API_KEY;
+            
+            if (tdAssets.length > 0 && tdKey) {
+                const tdSymbols = tdAssets.map(a => a.wsSymbol);
+                const tdWs = new TwelveDataWSManager(tdSymbols, tdKey);
+                
+                tdWs.onTick(handleTick);
+                tdWs.onStatusChange((status) => {
+                    tdAssets.forEach(asset => {
+                        dispatch({ type: 'SET_STATUS', symbol: asset.id, status });
+                    });
+                });
+                
+                // Add staggered connection start for Twelve Data to avoid concurrent burst if needed
+                setTimeout(() => tdWs.connect(), 1000);
+                twelveDataRef.current = tdWs;
+            }
         };
 
         initializeData();
@@ -202,6 +227,10 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
             mountedRef.current = false;
             binanceRef.current?.disconnect();
             binanceRef.current = null;
+            
+            twelveDataRef.current?.disconnect();
+            twelveDataRef.current = null;
+            
             candleBuildersRef.current.forEach(builder => builder.reset());
             candleBuildersRef.current.clear();
         };
