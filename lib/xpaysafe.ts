@@ -33,7 +33,7 @@ function getHmacKey(apiSecret: string, salt: string): string {
 }
 
 /** Sign an exact string (the request body). Use this so we sign exactly what we send. */
-function signPayloadRaw(
+export function signPayloadRaw(
   payloadString: string,
   apiSecret: string,
   salt: string
