@@ -52,10 +52,12 @@ export async function GET(request: NextRequest) {
         w.potential_win as "potentialWin",
         w.status as "wagerStatus",
         w.market_status as "marketStatus",
-        m.title as "marketTitle"
+        m.title as "marketTitle",
+        pp.status as "payoutStatus"
       FROM wallet_transactions wt
       LEFT JOIN wagers w ON wt.wager_id = w.id
       LEFT JOIN markets m ON w.market_id = m.id
+      LEFT JOIN pending_payouts pp ON pp.wallet_transaction_id = wt.id
       WHERE wt.user_id = $1
       ORDER BY wt.created_at DESC
       LIMIT 100`,
@@ -116,7 +118,7 @@ export async function GET(request: NextRequest) {
             : undefined,
           potentialWin: row.potentialWin ? parseFloat(row.potentialWin as string) : undefined,
           payout: row.type === "win" ? parseFloat(row.amount as string) : (row.wagerStatus === "WON" ? row.potentialWin : undefined),
-          status: row.wagerStatus || "COMPLETED",
+          status: row.payoutStatus || row.wagerStatus || "COMPLETED",
           marketStatus: row.marketStatus || "OPEN",
         };
       });

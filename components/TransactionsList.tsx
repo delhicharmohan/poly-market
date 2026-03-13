@@ -75,6 +75,12 @@ export default function TransactionsList() {
     if (tx.type === "deposit" || tx.type === "win" || (tx.type === "wager" && tx.status === "WON")) {
       return "Completed";
     }
+    if (tx.status === "COMPLETED" || tx.status === "SUCCESS") {
+      return "Completed";
+    }
+    if (tx.type === "withdraw" && !tx.wagerId && (tx.status === "FAILED" || tx.status === "EXPIRED")) {
+      return "Failed";
+    }
     if (tx.status === "LOST") return "Settled";
     return "Pending";
   };
@@ -154,7 +160,7 @@ export default function TransactionsList() {
                     Balance: ${(tx.balanceAfter ?? 0).toFixed(2)}
                   </span>
                   <div className="flex items-center gap-1.5 mt-1">
-                    <span className={`text-[10px] font-medium ${getStatusText(tx) === "Pending" ? "text-amber-600" : "text-slate-400 dark:text-slate-500"
+                    <span className={`text-[10px] font-medium ${getStatusText(tx) === "Pending" ? "text-amber-600" : getStatusText(tx) === "Failed" ? "text-rose-600" : "text-slate-400 dark:text-slate-500"
                       }`}>
                       {getStatusText(tx)}
                     </span>
