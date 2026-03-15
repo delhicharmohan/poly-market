@@ -21,12 +21,13 @@ import {
   Minus,
   Search,
   Eye,
+  TrendingUp,
 } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { useAuth } from "@/lib/auth";
 import { dbClient } from "@/lib/db-client";
 
-type Tab = "users" | "transactions" | "sales";
+type Tab = "users" | "transactions" | "trades" | "sales";
 
 function formatINR(amount: number): string {
   return `₹${amount >= 1000 ? amount.toLocaleString("en-IN") : amount.toFixed(2)}`;
@@ -372,6 +373,7 @@ export default function AdminPage() {
   // Search
   const [searchUsers, setSearchUsers] = useState("");
   const [searchTx, setSearchTx] = useState("");
+  const [searchTrades, setSearchTrades] = useState("");
   const [searchSales, setSearchSales] = useState("");
 
   // Modal states
@@ -435,6 +437,24 @@ export default function AdminPage() {
     );
   }, [transactions, searchTx]);
 
+  // Extract trade-related transactions
+  const allTrades = useMemo(() => {
+    return transactions.filter(
+      (tx) => (tx.description || "").startsWith("Trade:") || (tx.description || "").startsWith("Trade won:")
+    );
+  }, [transactions]);
+
+  const filteredTrades = useMemo(() => {
+    if (!searchTrades.trim()) return allTrades;
+    const q = searchTrades.toLowerCase();
+    return allTrades.filter(
+      (tx) =>
+        tx.userEmail?.toLowerCase().includes(q) ||
+        tx.userDisplayName?.toLowerCase().includes(q) ||
+        tx.description?.toLowerCase().includes(q)
+    );
+  }, [allTrades, searchTrades]);
+
   const filteredSales = useMemo(() => {
     if (!searchSales.trim()) return sales;
     const q = searchSales.toLowerCase();
@@ -477,6 +497,7 @@ export default function AdminPage() {
   const tabs: { id: Tab; label: string; icon: typeof Users }[] = [
     { id: "users", label: "Users", icon: Users },
     { id: "transactions", label: "Transactions", icon: Receipt },
+    { id: "trades", label: "Trades", icon: TrendingUp },
     { id: "sales", label: "Sales", icon: ShoppingBag },
   ];
 
@@ -631,6 +652,65 @@ export default function AdminPage() {
                   {filteredTx.length === 0 && (
                     <div className="p-8 text-center text-slate-500 dark:text-slate-400">
                       {searchTx ? "No transactions match your search." : "No transactions yet."}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ══════════════ TRADES TAB ══════════════ */}
+            {tab === "trades" && (
+              <div className="space-y-4">
+                <div className="max-w-sm">
+                  <SearchInput value={searchTrades} onChange={setSearchTrades} placeholder="Search trades by user, asset, or direction…" />
+                </div>
+                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                  <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-slate-50 dark:bg-slate-900/95 z-10">
+                        <tr className="border-b border-slate-200 dark:border-slate-700">
+                          <th className="text-left p-3 font-semibold text-slate-700 dark:text-slate-300">User</th>
+                          <th className="text-left p-3 font-semibold text-slate-700 dark:text-slate-300">Trade</th>
+                          <th className="text-right p-3 font-semibold text-slate-700 dark:text-slate-300">Amount</th>
+                          <th className="text-center p-3 font-semibold text-slate-700 dark:text-slate-300">Result</th>
+                          <th className="text-left p-3 font-semibold text-slate-700 dark:text-slate-300">Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredTrades.map((tx) => {
+                          const desc = tx.description || "";
+                          const isWin = desc.startsWith("Trade won:");
+                          return (
+                            <tr key={tx.id} className="border-b border-slate-100 dark:border-slate-700/50">
+                              <td className="p-3">
+                                <span className="text-slate-900 dark:text-white block">{tx.userEmail}</span>
+                                {tx.userDisplayName && <span className="text-xs text-slate-500 dark:text-slate-400">{tx.userDisplayName}</span>}
+                              </td>
+                              <td className="p-3 text-slate-600 dark:text-slate-300 text-xs font-mono max-w-[280px]" title={desc}>
+                                {desc}
+                              </td>
+                              <td className="p-3 text-right font-medium tabular-nums">
+                                <span className={tx.amount >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}>
+                                  {tx.amount >= 0 ? "+" : ""}${Math.abs(tx.amount)?.toFixed(2)}
+                                </span>
+                              </td>
+                              <td className="p-3 text-center">
+                                {isWin ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">Won</span>
+                                ) : (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">Placed</span>
+                                )}
+                              </td>
+                              <td className="p-3 text-slate-500 dark:text-slate-400 text-xs">{formatDate(new Date(tx.timestamp).toISOString())}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {filteredTrades.length === 0 && (
+                    <div className="p-8 text-center text-slate-500 dark:text-slate-400">
+                      {searchTrades ? "No trades match your search." : "No trades yet."}
                     </div>
                   )}
                 </div>

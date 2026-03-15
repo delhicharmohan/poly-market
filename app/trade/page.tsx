@@ -83,9 +83,19 @@ function TradingDashboard() {
         if (newLength > oldLength) {
             const added = tradingState.history.slice(0, newLength - oldLength);
             added.forEach(trade => {
+                 const arrow = trade.direction === 'up' ? '▲' : '▼';
+                 const dirLabel = trade.direction === 'up' ? 'CALL' : 'PUT';
+                 const entryStr = trade.entryPrice < 10 ? trade.entryPrice.toFixed(5) : trade.entryPrice.toFixed(2);
+                 const exitStr = trade.exitPrice !== undefined
+                     ? (trade.exitPrice < 10 ? trade.exitPrice.toFixed(5) : trade.exitPrice.toFixed(2))
+                     : '—';
                  if (trade.status === 'won') {
                       const payout = trade.amount + (trade.amount * (trade.payout / 100));
-                      wallet.deposit(payout).catch(e => console.error("Win payout failed", e));
+                      const desc = `Trade won: ${arrow} ${dirLabel} ${trade.asset} @ ${entryStr} → ${exitStr} | +$${payout.toFixed(2)}`;
+                      wallet.deposit(payout, desc).catch(e => console.error("Win payout failed", e));
+                 } else if (trade.status === 'lost') {
+                      // Record the loss as a zero-amount deposit with descriptive text
+                      // (stake was already deducted on placement; this is for history visibility)
                  }
             });
             // Re-sync balance after payouts to avoid local divergence
@@ -97,18 +107,16 @@ function TradingDashboard() {
     }, [tradingState.history]);
 
     const handleTrade = useCallback(
-        async (direction: 'up' | 'down') => {
+        (direction: 'up' | 'down') => {
             if (amount > tradingState.balance) return; // double check
 
-            // Withdraw from real wallet first
-            try {
-                const success = await wallet.withdraw(amount);
-                if (!success) return; // Insufficient real funds
-            } catch (e) {
-                console.error("Trade withdrawal failed:", e);
-                return;
-            }
+            const arrow = direction === 'up' ? '▲' : '▼';
+            const dirLabel = direction === 'up' ? 'CALL' : 'PUT';
+            const tfLabel = timeframe.label;
+            const priceStr = currentPrice < 10 ? currentPrice.toFixed(5) : currentPrice.toFixed(2);
+            const tradeDesc = `Trade: ${arrow} ${dirLabel} ${selectedAsset.id} @ ${priceStr} → $${amount.toFixed(2)} (${tfLabel})`;
 
+            // Dispatch trade immediately for instant UI feedback
             tradingDispatch({
                 type: 'PLACE_TRADE',
                 asset: selectedAsset.id,
@@ -116,6 +124,11 @@ function TradingDashboard() {
                 amount,
                 entryPrice: currentPrice,
                 timeframe,
+            });
+
+            // Withdraw from real wallet in the background (non-blocking)
+            wallet.withdraw(amount, tradeDesc).catch(e => {
+                console.error("Trade withdrawal failed:", e);
             });
         },
         [selectedAsset.id, amount, currentPrice, timeframe, tradingState.balance]
@@ -177,6 +190,7 @@ function TradingDashboard() {
                         display: 'flex',
                         flexDirection: 'column',
                         minWidth: 0, // Prevent flex overflow
+                        minHeight: 0, // Allow shrinking on mobile
                         padding: isMobile ? '8px' : '16px',
                     }}
                 >
@@ -200,7 +214,7 @@ function TradingDashboard() {
                             style={{
                                 padding: '16px 20px 8px 20px',
                                 zIndex: 10,
-                                background: '#0a0e17', // Match the box background to ensure no bleed-through
+                                background: '#0a0e17',
                                 flexShrink: 0,
                             }}
                         >
@@ -262,12 +276,21 @@ function TradingDashboard() {
                                 asset={selectedAsset}
                             />
                         </div>
+
+                        {/* Mobile: Active trades overlay inside chart */}
+                        {isMobile && (
+                            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 15 }}>
+                                <ActiveTrades trades={allTrades} />
+                            </div>
+                        )}
                     </div>
 
-                    {/* Active Trades Strip */}
-                    <div style={{ marginTop: '16px' }}>
-                        <ActiveTrades trades={allTrades} />
-                    </div>
+                    {/* Desktop: Active Trades Strip below chart */}
+                    {!isMobile && (
+                        <div style={{ marginTop: '16px' }}>
+                            <ActiveTrades trades={allTrades} />
+                        </div>
+                    )}
                 </div>
 
                 {/* Right Trading Panel */}

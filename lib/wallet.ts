@@ -40,7 +40,7 @@ class Wallet {
     return this.balance;
   }
 
-  async deposit(amount: number): Promise<boolean> {
+  async deposit(amount: number, description?: string): Promise<boolean> {
     if (amount <= 0 || isNaN(amount)) {
       return false;
     }
@@ -48,7 +48,7 @@ class Wallet {
     // Try to save to database first
     if (this.useDatabase) {
       try {
-        const result = await dbClient.updateWallet("deposit", amount, `Deposit of $${amount.toFixed(2)}`);
+        const result = await dbClient.updateWallet("deposit", amount, description || `Deposit of $${amount.toFixed(2)}`);
         this.balance = result.balance;
         this.saveBalance();
         return true;
@@ -63,7 +63,7 @@ class Wallet {
     return true;
   }
 
-  async withdraw(amount: number): Promise<boolean> {
+  async withdraw(amount: number, description?: string): Promise<boolean> {
     if (amount <= 0 || isNaN(amount)) {
       return false;
     }
@@ -77,7 +77,7 @@ class Wallet {
     // Try to save to database first
     if (this.useDatabase) {
       try {
-        const result = await dbClient.updateWallet("withdraw", amount, `Withdrawal of $${amount.toFixed(2)}`);
+        const result = await dbClient.updateWallet("withdraw", amount, description || `Withdrawal of $${amount.toFixed(2)}`);
         this.balance = result.balance;
         this.balanceLoaded = true; // Mark as loaded after successful update
         this.saveBalance();

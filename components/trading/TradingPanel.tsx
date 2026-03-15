@@ -223,7 +223,7 @@ function MobileTradingPanel({
                         transition: 'all .2s ease',
                     }}
                 >
-                    ▲ CALL
+                    ▲ Buy
                 </button>
                 <button
                     onClick={() => onTrade('down')}
@@ -245,7 +245,7 @@ function MobileTradingPanel({
                         transition: 'all .2s ease',
                     }}
                 >
-                    ▼ PUT
+                    ▼ Sell
                 </button>
             </div>
         </div>
@@ -474,7 +474,7 @@ function DesktopTradingPanel({
                         transition: 'all .2s ease',
                     }}
                 >
-                    ▲ CALL
+                    ▲ Buy
                 </button>
                 <button
                     onClick={() => onTrade('down')}
@@ -496,7 +496,7 @@ function DesktopTradingPanel({
                         transition: 'all .2s ease',
                     }}
                 >
-                    ▼ PUT
+                    ▼ Sell
                 </button>
             </div>
             

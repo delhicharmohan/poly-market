@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { transactions, Transaction } from "@/lib/transactions";
 import { Wallet, ChevronDown, ChevronUp, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 
-type FilterType = "all" | "active" | "settled" | "deposit" | "withdraw";
+type FilterType = "all" | "active" | "settled" | "deposit" | "withdraw" | "trade";
 
 export default function TransactionsList() {
   const [transactionList, setTransactionList] = useState<Transaction[]>([]);
@@ -51,15 +51,19 @@ export default function TransactionsList() {
     if (filter === "settled") return tx.marketStatus === "SETTLED" || tx.type === "win";
     const isWager = tx.type === "wager" || (tx.type === "withdraw" && !!tx.wagerId);
     if (filter === "active") return tx.marketStatus !== "SETTLED" && isWager;
-    if (filter === "deposit") return tx.type === "deposit";
-    if (filter === "withdraw") return tx.type === "withdraw" && !tx.wagerId;
+    if (filter === "deposit") return tx.type === "deposit" && !(tx.description || "").startsWith("Trade won:");
+    if (filter === "withdraw") return tx.type === "withdraw" && !tx.wagerId && !(tx.description || "").startsWith("Trade:");
+    if (filter === "trade") return (tx.description || "").startsWith("Trade:") || (tx.description || "").startsWith("Trade won:");
     return true;
   });
 
   const getTransactionLabel = (tx: Transaction) => {
+    const desc = (tx.description || "");
+    if (desc.startsWith("Trade won:")) return "Trade Win";
+    if (desc.startsWith("Trade:")) return "Trade";
     switch (tx.type) {
       case "deposit": {
-        const d = (tx.description || "").toLowerCase();
+        const d = desc.toLowerCase();
         if (d.includes("refund")) return "Refund";
         if (d.includes("free points") || d.includes("purchase")) return "Purchase";
         return "Deposit";
@@ -72,6 +76,9 @@ export default function TransactionsList() {
   };
 
   const getStatusText = (tx: Transaction) => {
+    const desc = (tx.description || "");
+    if (desc.startsWith("Trade won:")) return "Won";
+    if (desc.startsWith("Trade:")) return "Lost";
     if (tx.type === "deposit" || tx.type === "win" || (tx.type === "wager" && tx.status === "WON")) {
       return "Completed";
     }
@@ -101,7 +108,7 @@ export default function TransactionsList() {
       {/* Header & Minimal Filters */}
       <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
         <div className="flex gap-1 overflow-x-auto scrollbar-hide">
-          {(["all", "active", "settled", "deposit", "withdraw"] as FilterType[]).map((f) => (
+          {(["all", "active", "settled", "deposit", "withdraw", "trade"] as FilterType[]).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -146,7 +153,13 @@ export default function TransactionsList() {
 
                   {/* Market Question - No truncation */}
                   <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-200 leading-snug">
-                    {tx.marketTitle || tx.description || "System Transaction"}
+                    {(() => {
+                      const desc = tx.description || "";
+                      if (desc.startsWith("Trade won:") || desc.startsWith("Trade:")) {
+                        return desc;
+                      }
+                      return tx.marketTitle || tx.description || "System Transaction";
+                    })()}
                   </h4>
                 </div>
 
@@ -160,7 +173,7 @@ export default function TransactionsList() {
                     Balance: ${(tx.balanceAfter ?? 0).toFixed(2)}
                   </span>
                   <div className="flex items-center gap-1.5 mt-1">
-                    <span className={`text-[10px] font-medium ${getStatusText(tx) === "Pending" ? "text-amber-600" : getStatusText(tx) === "Failed" ? "text-rose-600" : "text-slate-400 dark:text-slate-500"
+                    <span className={`text-[10px] font-medium ${getStatusText(tx) === "Pending" ? "text-amber-600" : getStatusText(tx) === "Failed" || getStatusText(tx) === "Lost" ? "text-rose-600" : getStatusText(tx) === "Won" ? "text-emerald-600" : "text-slate-400 dark:text-slate-500"
                       }`}>
                       {getStatusText(tx)}
                     </span>

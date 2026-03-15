@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useRef, useCallback, useReducer } from 'react';
 import { AssetState, Candle, ConnectionStatus, Tick, ASSETS } from './types';
 import { BinanceWSManager } from './ws-binance';
-import { TwelveDataWSManager } from './ws-twelvedata';
+import { VeloraWSManager } from './ws-velora';
 import { CandleBuilder } from './candle-builder';
 
 // ─── Binance REST API — fetch historical klines ───
@@ -141,7 +141,7 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
 
     const candleBuildersRef = useRef<Map<string, CandleBuilder>>(new Map());
     const binanceRef = useRef<BinanceWSManager | null>(null);
-    const twelveDataRefs = useRef<TwelveDataWSManager[]>([]);
+    const veloraRef = useRef<VeloraWSManager | null>(null);
 
     // Guard against React Strict Mode double-mount
     const mountedRef = useRef(false);
@@ -182,6 +182,17 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
                     });
                 })
             );
+            // Initialize Velora (Forex) assets with seed prices (no historical klines from Binance)
+            const veloraAssets = ASSETS.filter(a => a.provider === 'velora');
+            veloraAssets.forEach(asset => {
+                dispatch({
+                    type: 'INIT_ASSET',
+                    symbol: asset.id,
+                    price: asset.seedPrice,
+                    candles: [],
+                });
+            });
+
             console.log('[MarketData] Historical klines loaded for all assets');
 
             // Step 2: Connect Binance WebSocket for live ticks
@@ -199,24 +210,27 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
                 binanceRef.current = binance;
             }
 
-            // Step 3: Connect Twelve Data WebSocket for Forex
-            const tdAssets = ASSETS.filter(a => a.provider === 'twelvedata');
-            const tdKey = process.env.NEXT_PUBLIC_TWELVEDATA_API_KEY;
-            
-            if (tdAssets.length > 0 && tdKey) {
-                // Connect each Forex pair on its own WebSocket to satisfy Free Tier limits
-                tdAssets.forEach((asset, idx) => {
-                    const tdWs = new TwelveDataWSManager(asset.wsSymbol, tdKey);
-                    
-                    tdWs.onTick(handleTick);
-                    tdWs.onStatusChange((status) => {
+            // Step 3: Connect Velora bridge for Forex
+            if (veloraAssets.length > 0) {
+                // Build token → assetId mapping
+                const tokenToAsset: Record<string, string> = {};
+                veloraAssets.forEach(asset => {
+                    if (asset.instrumentToken) {
+                        tokenToAsset[asset.instrumentToken] = asset.id;
+                    }
+                });
+
+                const velora = new VeloraWSManager(tokenToAsset);
+                velora.onTick(handleTick);
+                velora.onStatusChange((status) => {
+                    veloraAssets.forEach(asset => {
                         dispatch({ type: 'SET_STATUS', symbol: asset.id, status });
                     });
-                    
-                    // Stagger connections
-                    setTimeout(() => tdWs.connect(), 1000 + (idx * 500));
-                    twelveDataRefs.current.push(tdWs);
                 });
+                
+                // Small delay to let Binance connect first
+                setTimeout(() => velora.connect(), 2000);
+                veloraRef.current = velora;
             }
         };
 
@@ -228,8 +242,8 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
             binanceRef.current?.disconnect();
             binanceRef.current = null;
             
-            twelveDataRefs.current.forEach(td => td.disconnect());
-            twelveDataRefs.current = [];
+            veloraRef.current?.disconnect();
+            veloraRef.current = null;
             
             candleBuildersRef.current.forEach(builder => builder.reset());
             candleBuildersRef.current.clear();

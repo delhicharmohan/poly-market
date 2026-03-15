@@ -21,9 +21,11 @@ export interface Candle {
 export interface Asset {
     id: string;
     label: string;
-    provider: 'binance' | 'twelvedata' | 'finnhub';
+    provider: 'binance' | 'twelvedata' | 'finnhub' | 'velora';
     /** WebSocket symbol identifier for the provider */
     wsSymbol: string;
+    /** Velora instrument token (only for velora provider) */
+    instrumentToken?: string;
     /** Seed price for simulation fallback */
     seedPrice: number;
     /** Display color */
@@ -97,8 +99,9 @@ export const ASSETS: Asset[] = [
     {
         id: 'EUR/USD',
         label: 'EUR/USD',
-        provider: 'twelvedata',
+        provider: 'velora',
         wsSymbol: 'EUR/USD',
+        instrumentToken: '3045',
         seedPrice: 1.0845,
         color: '#EC4899', // Pink
         volatility: 0.0005,
@@ -107,8 +110,9 @@ export const ASSETS: Asset[] = [
     {
         id: 'GBP/USD',
         label: 'GBP/USD',
-        provider: 'twelvedata',
+        provider: 'velora',
         wsSymbol: 'GBP/USD',
+        instrumentToken: '3045',
         seedPrice: 1.2643,
         color: '#8B5CF6', // Purple
         volatility: 0.0005,
