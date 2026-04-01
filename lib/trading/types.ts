@@ -55,10 +55,16 @@ export interface Timeframe {
     seconds: number;
 }
 
+export interface TickPoint {
+    price: number;
+    time: number;
+}
+
 export interface AssetState {
     currentPrice: number;
     previousPrice: number;
     candles: Candle[];
+    ticks: TickPoint[];
     connectionStatus: ConnectionStatus;
     lastTickTime: number;
 }
@@ -112,9 +118,60 @@ export const ASSETS: Asset[] = [
         label: 'GBP/USD',
         provider: 'velora',
         wsSymbol: 'GBP/USD',
-        instrumentToken: '3045',
+        instrumentToken: '3046',
         seedPrice: 1.2643,
         color: '#8B5CF6', // Purple
+        volatility: 0.0005,
+        decimals: 5,
+    },
+    {
+        id: 'SILVER',
+        label: 'SILVER',
+        provider: 'velora',
+        wsSymbol: 'XAG/USD',
+        instrumentToken: '3049',
+        seedPrice: 24.50,
+        color: '#94a3b8', // Silver/Slate
+        volatility: 0.002,
+        decimals: 3,
+    },
+    {
+        id: 'AAPL',
+        label: 'AAPL',
+        provider: 'finnhub',
+        wsSymbol: 'AAPL',
+        seedPrice: 190.50,
+        color: '#A2AAAD', // Apple Silver
+        volatility: 0.002,
+        decimals: 2,
+    },
+    {
+        id: 'BTC-FH',
+        label: 'BTC (FH)',
+        provider: 'finnhub',
+        wsSymbol: 'BINANCE:BTCUSDT',
+        seedPrice: 70000,
+        color: '#F59E0B',
+        volatility: 0.004,
+        decimals: 2,
+    },
+    {
+        id: 'ETH-FH',
+        label: 'ETH (FH)',
+        provider: 'finnhub',
+        wsSymbol: 'BINANCE:ETHUSDT',
+        seedPrice: 3500,
+        color: '#6366F1',
+        volatility: 0.005,
+        decimals: 2,
+    },
+    {
+        id: 'EURUSD-FH',
+        label: 'EUR/USD (FH)',
+        provider: 'finnhub',
+        wsSymbol: 'OANDA:EUR_USD',
+        seedPrice: 1.08,
+        color: '#10B981',
         volatility: 0.0005,
         decimals: 5,
     },

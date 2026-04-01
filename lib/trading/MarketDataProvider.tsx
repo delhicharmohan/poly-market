@@ -1,42 +1,11 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useRef, useCallback, useReducer } from 'react';
-import { AssetState, Candle, ConnectionStatus, Tick, ASSETS } from './types';
+import { AssetState, Candle, ConnectionStatus, Tick, ASSETS, TickPoint } from './types';
 import { BinanceWSManager } from './ws-binance';
 import { VeloraWSManager } from './ws-velora';
+import { FinnhubWSManager } from './ws-finnhub';
 import { CandleBuilder } from './candle-builder';
-
-// ─── Binance REST API — fetch historical klines ───
-
-const BINANCE_SYMBOL_MAP: Record<string, string> = {
-    'BTC/USD': 'BTCUSDT',
-    'ETH/USD': 'ETHUSDT',
-    'GOLD': 'PAXGUSDT',
-};
-
-async function fetchHistoricalKlines(assetId: string, limit = 100): Promise<Candle[]> {
-    const binanceSymbol = BINANCE_SYMBOL_MAP[assetId];
-    if (!binanceSymbol) return [];
-
-    try {
-        const url = `https://api.binance.com/api/v3/klines?symbol=${binanceSymbol}&interval=1m&limit=${limit}`;
-        const res = await fetch(url);
-        if (!res.ok) return [];
-        const data = await res.json();
-
-        // Binance kline format: [openTime, open, high, low, close, volume, closeTime, ...]
-        return data.map((k: any[]) => ({
-            time: k[0],
-            open: parseFloat(k[1]),
-            high: parseFloat(k[2]),
-            low: parseFloat(k[3]),
-            close: parseFloat(k[4]),
-        }));
-    } catch (e) {
-        console.warn(`[MarketData] Failed to fetch klines for ${assetId}:`, e);
-        return [];
-    }
-}
 
 // ─── State ───
 
@@ -48,7 +17,7 @@ type MarketAction =
     | { type: 'TICK'; symbol: string; price: number; timestamp: number }
     | { type: 'ADD_CANDLE'; symbol: string; candle: Candle }
     | { type: 'SET_STATUS'; symbol: string; status: ConnectionStatus }
-    | { type: 'INIT_ASSET'; symbol: string; price: number; candles: Candle[] };
+    | { type: 'INIT_ASSET'; symbol: string; price: number; candles: Candle[]; ticks: TickPoint[] };
 
 function marketReducer(state: MarketState, action: MarketAction): MarketState {
     switch (action.type) {
@@ -61,6 +30,7 @@ function marketReducer(state: MarketState, action: MarketAction): MarketState {
                         currentPrice: action.price,
                         previousPrice: action.price,
                         candles: action.candles,
+                        ticks: action.ticks,
                         connectionStatus: 'connecting',
                         lastTickTime: Date.now(),
                     },
@@ -79,6 +49,7 @@ function marketReducer(state: MarketState, action: MarketAction): MarketState {
                         previousPrice: prev.currentPrice,
                         currentPrice: action.price,
                         lastTickTime: action.timestamp,
+                        ticks: [...prev.ticks.slice(-600), { price: action.price, time: action.timestamp }],
                     },
                 },
             };
@@ -142,6 +113,7 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
     const candleBuildersRef = useRef<Map<string, CandleBuilder>>(new Map());
     const binanceRef = useRef<BinanceWSManager | null>(null);
     const veloraRef = useRef<VeloraWSManager | null>(null);
+    const finnhubRef = useRef<FinnhubWSManager | null>(null);
 
     // Guard against React Strict Mode double-mount
     const mountedRef = useRef(false);
@@ -167,33 +139,43 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
         if (mountedRef.current) return;
         mountedRef.current = true;
 
-        // Step 1: Fetch historical klines for all assets, then connect WebSocket
         const initializeData = async () => {
-            // Fetch historical data in parallel for all assets
-            const results = await Promise.allSettled(
+            // Step 1: Fetch historical data for ALL assets from our centralized API
+            // This ensures all users see the same consistent baseline
+            await Promise.allSettled(
                 ASSETS.map(async (asset) => {
-                    const candles = await fetchHistoricalKlines(asset.id, 100);
-                    const lastPrice = candles.length > 0 ? candles[candles.length - 1].close : 0;
-                    dispatch({
-                        type: 'INIT_ASSET',
-                        symbol: asset.id,
-                        price: lastPrice,
-                        candles,
-                    });
+                    try {
+                        const res = await fetch(`/api/trading/history?asset=${encodeURIComponent(asset.id)}`);
+                        const data = res.ok ? await res.json() : { candles: [], ticks: [] };
+                        const candles = data.candles || [];
+                        const ticks = data.ticks || [];
+                        
+                        const lastPrice = ticks.length > 0 
+                            ? ticks[ticks.length - 1].price 
+                            : (candles.length > 0 ? candles[candles.length - 1].close : asset.seedPrice);
+
+                        dispatch({
+                            type: 'INIT_ASSET',
+                            symbol: asset.id,
+                            price: lastPrice,
+                            candles,
+                            ticks,
+                        });
+                    } catch (e) {
+                        console.warn(`[MarketData] Failed to fetch history for ${asset.id}:`, e);
+                        // Fallback to seed price if API fails
+                        dispatch({
+                            type: 'INIT_ASSET',
+                            symbol: asset.id,
+                            price: asset.seedPrice,
+                            candles: [],
+                            ticks: [],
+                        });
+                    }
                 })
             );
-            // Initialize Velora (Forex) assets with seed prices (no historical klines from Binance)
-            const veloraAssets = ASSETS.filter(a => a.provider === 'velora');
-            veloraAssets.forEach(asset => {
-                dispatch({
-                    type: 'INIT_ASSET',
-                    symbol: asset.id,
-                    price: asset.seedPrice,
-                    candles: [],
-                });
-            });
 
-            console.log('[MarketData] Historical klines loaded for all assets');
+            console.log('[MarketData] Centralized historical data loaded');
 
             // Step 2: Connect Binance WebSocket for live ticks
             const binanceAssets = ASSETS.filter(a => a.provider === 'binance');
@@ -211,8 +193,8 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
             }
 
             // Step 3: Connect Velora bridge for Forex
+            const veloraAssets = ASSETS.filter(a => a.provider === 'velora');
             if (veloraAssets.length > 0) {
-                // Build token → assetId mapping
                 const tokenToAsset: Record<string, string> = {};
                 veloraAssets.forEach(asset => {
                     if (asset.instrumentToken) {
@@ -228,23 +210,41 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
                     });
                 });
                 
-                // Small delay to let Binance connect first
                 setTimeout(() => velora.connect(), 2000);
                 veloraRef.current = velora;
+            }
+
+            // Step 4: Connect Finnhub WebSocket for Stocks
+            const finnhubAssets = ASSETS.filter(a => a.provider === 'finnhub');
+            if (finnhubAssets.length > 0) {
+                const finnhubApiKey = process.env.NEXT_PUBLIC_FINNHUB_API_KEY;
+                if (!finnhubApiKey) {
+                    console.warn('[MarketData] Finnhub API Key missing, skipping stock symbols');
+                } else {
+                    const symbols = finnhubAssets.map(a => a.wsSymbol);
+                    const finnhub = new FinnhubWSManager(symbols, finnhubApiKey);
+                    finnhub.onTick(handleTick);
+                    finnhub.onStatusChange((status) => {
+                        finnhubAssets.forEach(asset => {
+                            dispatch({ type: 'SET_STATUS', symbol: asset.id, status });
+                        });
+                    });
+                    finnhub.connect();
+                    finnhubRef.current = finnhub;
+                }
             }
         };
 
         initializeData();
 
-        // Cleanup
         return () => {
             mountedRef.current = false;
             binanceRef.current?.disconnect();
             binanceRef.current = null;
-            
             veloraRef.current?.disconnect();
             veloraRef.current = null;
-            
+            finnhubRef.current?.disconnect();
+            finnhubRef.current = null;
             candleBuildersRef.current.forEach(builder => builder.reset());
             candleBuildersRef.current.clear();
         };

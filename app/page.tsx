@@ -18,6 +18,7 @@ import { useAuth } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Filter, User } from "lucide-react";
+import IplMatchBanner from "@/components/IplMatchBanner";
 
 export default function Home() {
   const router = useRouter();
@@ -132,6 +133,7 @@ export default function Home() {
       <ActivityTicker />
 
       <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8 pb-20 sm:pb-8">
+        <IplMatchBanner />
         <MarketStats />
 
         <CategoryNav

@@ -8,7 +8,7 @@ export interface Transaction {
   wagerId?: string; // Only for wager/win transactions
   marketId?: string; // Only for wager transactions
   marketTitle?: string; // Only for wager transactions
-  selection?: "yes" | "no"; // Only for wager transactions
+  selection?: string; // Only for wager transactions
   stake?: number; // Only for wager transactions
   odds?: {
     yes: number;
@@ -58,7 +58,7 @@ class Transactions {
   ): Promise<void> {
     // B2B may omit odds (e.g. pari-mutuel); use fallback for display, settlement uses webhook payouts
     const odds = wagerResult.odds ?? { yes: 1, no: 1 };
-    const oddsForSelection = odds[wagerResult.selection] ?? 1;
+    const oddsForSelection = (odds as any)[wagerResult.selection] ?? 1;
     const potentialWin = wagerResult.stake * oddsForSelection;
 
     const transaction: Transaction = {

@@ -35,7 +35,7 @@ export interface Market {
 
 export interface WagerRequest {
   marketId: string;
-  selection: "yes" | "no";
+  selection: string;
   stake: number;
 }
 
@@ -44,7 +44,7 @@ export interface WagerResponse {
   wagerId: string;
   marketId: string;
   stake: number;
-  selection: "yes" | "no";
+  selection: string;
   odds?: {
     yes: number;
     no: number;
@@ -53,6 +53,63 @@ export interface WagerResponse {
   metrics?: MarketMetrics;
   /** Possible winning after platform commission. Prefer this over stake × odds in UI. */
   potentialWin?: number;
+}
+
+/// --- IPL Cricket Integration Types ---
+
+export interface IplTournament {
+  id: string;
+  roanuz_key: string;
+  name: string;
+  status: string;
+  start_date: string;
+  end_date: string;
+}
+
+export interface IplTeam {
+  key: string;
+  name: string;
+  short_name: string;
+}
+
+export interface IplMatch {
+  id: string;
+  roanuz_key: string;
+  match_number: number;
+  team_a: IplTeam;
+  team_b: IplTeam;
+  venue: string;
+  start_time: string;
+  status: "SCHEDULED" | "LIVE" | "COMPLETED" | "ABANDONED" | string;
+  score: any[];
+  micro_contests_enabled: boolean;
+  toss?: any;
+  result?: any;
+  match_odds?: any;
+}
+
+export interface IplPreMatchContest {
+  id: string;
+  title: string;
+  contest_type: "MATCH_WINNER" | "TOTAL_SIXES" | "RUNS_BRACKET" | string;
+  status: string;
+  pool_yes: string;
+  pool_no: string;
+  closure_timestamp: number;
+  resolution_timestamp: number;
+}
+
+export interface IplMicroContest {
+  id: string;
+  market_id: string;
+  over_number: number;
+  innings: number;
+  contest_type: "OVER_OUTCOME" | "OVER_RUNS" | string;
+  status: string;
+  title: string;
+  pools: Record<string, number>;
+  total_pool: string;
+  opened_at?: string;
 }
 
 export interface ApiError {

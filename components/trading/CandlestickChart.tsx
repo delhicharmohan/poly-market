@@ -5,6 +5,7 @@ import { Candle, Asset, Trade } from '@/lib/trading/types';
 
 interface SmoothChartProps {
     candles: Candle[];
+    ticks: { price: number; time: number }[];
     currentPrice: number;
     trades: Trade[];
     asset: Asset;
@@ -12,6 +13,7 @@ interface SmoothChartProps {
 
 export default function CandlestickChart({
     candles,
+    ticks,
     currentPrice,
     trades,
     asset,
@@ -23,13 +25,20 @@ export default function CandlestickChart({
     const lastPriceRef = useRef(0);
     const lastAssetRef = useRef('');
 
-    // Clear tick history when asset changes
+    // Clear tick history when asset changes or initialize from ticks prop
     useEffect(() => {
         if (lastAssetRef.current !== asset.id) {
             lastAssetRef.current = asset.id;
             lastPriceRef.current = 0;
+            
+            // Initialize history with buffered ticks from server
+            if (ticks && ticks.length > 0) {
+                priceHistoryRef.current.set(asset.id, [...ticks]);
+            } else {
+                priceHistoryRef.current.set(asset.id, []);
+            }
         }
-    }, [asset.id]);
+    }, [asset.id, ticks]);
 
     // Accumulate tick prices into a per-asset price history
     useEffect(() => {

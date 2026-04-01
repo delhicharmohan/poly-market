@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { Home, History, TrendingUp, Wallet, CandlestickChart } from "lucide-react";
+import { Home, History, Zap, Wallet, CandlestickChart } from "lucide-react";
 
 export default function BottomNav() {
   const pathname = usePathname();
@@ -27,10 +27,10 @@ export default function BottomNav() {
       active: pathname === "/transactions",
     },
     {
-      href: "/breaking",
-      label: "Breaking",
-      icon: TrendingUp,
-      active: pathname === "/breaking",
+      href: "/challenges",
+      label: "Challenges",
+      icon: Zap,
+      active: pathname.startsWith("/challenges"),
     },
     {
       href: "/wallet",

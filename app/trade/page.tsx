@@ -46,6 +46,7 @@ function TradingDashboard() {
     const currentPrice = assetState?.currentPrice ?? selectedAsset.seedPrice;
     const previousPrice = assetState?.previousPrice ?? selectedAsset.seedPrice;
     const candles = assetState?.candles ?? [];
+    const ticks = assetState?.ticks ?? [];
     const connectionStatus = assetState?.connectionStatus ?? 'connecting';
 
     // Trade expiry checker — runs every 250ms
@@ -271,6 +272,7 @@ function TradingDashboard() {
                         <div style={{ flex: 1, minHeight: 0 }}>
                             <CandlestickChart
                                 candles={candles}
+                                ticks={ticks}
                                 currentPrice={currentPrice}
                                 trades={allTrades}
                                 asset={selectedAsset}

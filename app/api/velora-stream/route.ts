@@ -1,36 +1,23 @@
 import { NextResponse } from 'next/server';
-import WebSocket from 'ws';
+import { WebSocket, getVeloraWS, setVeloraWS, getLastVeloraAttempt, setLastVeloraAttempt } from '@/lib/trading/server-ws';
+import { pushTick } from '../trading/history/route';
 
 /**
  * Velora WebSocket Bridge — Server-Side
- *
- * This API route connects to the Velora WebSocket server-side (where we can set
- * the Authorization header), parses the binary compact market data, and caches
- * the latest prices. The frontend polls this route to get live Forex prices.
- *
- * Velora binary packet layout (compact_marketdata, mode=2):
- *   Byte 0      : msgType (int8)   — 2 = compact market data
- *   Byte 1      : exchange (int8)
- *   Bytes 2-5   : instrumentToken (int32)
- *   Bytes 6-9   : ltp (int32)      — last traded price (raw)
- *   Bytes 10-13 : change (int32)
- *   Bytes 14-17 : ltt (int32)      — last trade timestamp (epoch)
- *   Bytes 18-21 : lowDpr (int32)
- *   Bytes 22-25 : highDpr (int32)
- *   Bytes 34-37 : bidPrice (int32)
- *   Bytes 38-41 : askPrice (int32)
- *   Bytes 46-49 : precision (int32)
  */
 
-// ─── Instrument token → Asset ID mapping ───
-// We'll discover tokens dynamically and log them.
-// For now, we subscribe to a few known tokens and map by what we receive.
-const TOKEN_TO_ASSET: Record<number, string> = {};
+// Mapping of instrument tokens to our internal asset IDs
+const TOKEN_MAP: Record<number, string> = {
+    3045: 'EUR/USD',
+    3046: 'GBP/USD',
+    3047: 'USD/JPY',
+    3048: 'AUD/USD',
+    3049: 'SILVER',
+};
 
-// We'll also store reverse mapping for subscription
-const INSTRUMENT_TOKENS = ['3045']; // Start with the example from docs, will add more
+const INSTRUMENT_TOKENS = Object.keys(TOKEN_MAP).map(Number);
 
-// ─── In-memory price cache ───
+// Binary price cache
 interface VeloraPrice {
     symbol: string;
     token: number;
@@ -45,21 +32,16 @@ interface VeloraPrice {
 }
 
 const priceCache: Map<number, VeloraPrice> = new Map();
-let wsConnection: WebSocket | null = null;
 let connectionStatus: 'disconnected' | 'connecting' | 'connected' = 'disconnected';
-let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempts = 0;
 
 function parseBinaryMessage(buffer: Buffer): VeloraPrice | null {
     if (buffer.length < 50) return null;
-
     const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
     const msgType = view.getInt8(0);
-
-    // Only handle compact market data (mode = 2)
     if (msgType !== 2) return null;
 
-    const token = view.getInt32(2, false); // big-endian by default
+    const token = view.getInt32(2, false); 
     const ltpRaw = view.getInt32(6, false);
     const changeRaw = view.getInt32(10, false);
     const lttRaw = view.getInt32(14, false);
@@ -72,7 +54,7 @@ function parseBinaryMessage(buffer: Buffer): VeloraPrice | null {
     const divisor = Math.pow(10, precision);
 
     return {
-        symbol: TOKEN_TO_ASSET[token] || `TOKEN_${token}`,
+        symbol: TOKEN_MAP[token] || `TOKEN_${token}`,
         token,
         price: ltpRaw / divisor,
         bid: bidRaw / divisor,
@@ -80,7 +62,7 @@ function parseBinaryMessage(buffer: Buffer): VeloraPrice | null {
         change: changeRaw / divisor,
         low: lowRaw / divisor,
         high: highRaw / divisor,
-        timestamp: lttRaw * 1000, // epoch seconds → ms
+        timestamp: lttRaw * 1000, 
         precision,
     };
 }
@@ -94,9 +76,14 @@ function connectVelora() {
         return;
     }
 
-    if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
-        return; // Already connected
+    const currentWS = getVeloraWS();
+    if (currentWS && (currentWS.readyState === WebSocket.OPEN || currentWS.readyState === WebSocket.CONNECTING)) {
+        return;
     }
+
+    const now = Date.now();
+    if (now - getLastVeloraAttempt() < 5000) return;
+    setLastVeloraAttempt(now);
 
     connectionStatus = 'connecting';
     console.log('[Velora Bridge] Connecting to', wsUrl);
@@ -111,11 +98,12 @@ function connectVelora() {
         });
 
         ws.binaryType = 'arraybuffer';
+        setVeloraWS(ws);
 
         ws.on('open', () => {
             console.log('[Velora Bridge] ✓ Connected');
             connectionStatus = 'connected';
-            reconnectAttempts = 0; // Reset backoff on success
+            reconnectAttempts = 0; 
 
             // Subscribe to compact market data for our instrument tokens
             const subscribeMsg = JSON.stringify({
@@ -146,6 +134,12 @@ function connectVelora() {
             const parsed = parseBinaryMessage(buffer);
             if (parsed) {
                 priceCache.set(parsed.token, parsed);
+                
+                // Push to global tick store for 5-minute history
+                if (parsed.symbol.includes('/')) {
+                    pushTick(parsed.symbol, parsed.price, parsed.timestamp);
+                }
+
                 // Log first few updates for debugging
                 if (priceCache.size <= 5) {
                     console.log(`[Velora Bridge] Price update — Token ${parsed.token}: ${parsed.price} (precision: ${parsed.precision})`);
@@ -153,25 +147,25 @@ function connectVelora() {
             }
         });
 
-        ws.on('error', (error) => {
+        ws.on('error', (error: any) => {
             console.error('[Velora Bridge] WebSocket error:', error.message);
         });
 
-        ws.on('close', (code, reason) => {
+        ws.on('close', (code: number, reason: Buffer) => {
             console.log(`[Velora Bridge] Disconnected. Code: ${code}, Reason: ${reason?.toString()}`);
             connectionStatus = 'disconnected';
-            wsConnection = null;
+            setVeloraWS(null);
 
-            // Exponential backoff: 5s, 10s, 20s, 40s, 60s max
+            // Exponential backoff
             reconnectAttempts++;
             const delay = Math.min(5000 * Math.pow(2, reconnectAttempts - 1), 60000);
             console.log(`[Velora Bridge] Will reconnect in ${delay / 1000}s (attempt ${reconnectAttempts})`);
-            reconnectTimer = setTimeout(() => {
+            setTimeout(() => {
                 connectVelora();
             }, delay);
         });
 
-        wsConnection = ws;
+        setVeloraWS(ws);
     } catch (e) {
         console.error('[Velora Bridge] Failed to connect:', e);
         connectionStatus = 'disconnected';
@@ -182,7 +176,8 @@ function connectVelora() {
 
 export async function GET() {
     // Ensure connection is alive
-    if (!wsConnection || wsConnection.readyState !== WebSocket.OPEN) {
+    const currentWS = getVeloraWS();
+    if (!currentWS || currentWS.readyState !== WebSocket.OPEN) {
         connectVelora();
     }
 

@@ -54,7 +54,7 @@ export class DatabaseClient {
     wagerId: string;
     marketId: string;
     marketTitle: string;
-    selection: "yes" | "no";
+    selection: string;
     stake: number;
     odds: { yes: number; no: number };
     potentialWin: number;
@@ -350,6 +350,48 @@ export class DatabaseClient {
       params,
       { headers: this.getHeaders() }
     );
+    return response.data;
+  }
+
+  /* ── Challenges ── */
+
+  async getChallenges() {
+    const response = await axios.get("/api/challenges", {
+      headers: this.getHeaders(),
+    });
+    return response.data;
+  }
+
+  async getChallenge(id: string) {
+    // Note: We'll create a single GET for variety if needed, but for now we'll filter the list
+    const challenges = await this.getChallenges();
+    return challenges.find((c: any) => c.id === id);
+  }
+
+  async createChallenge(params: {
+    topic: string;
+    outcome_x: string;
+    outcome_y: string;
+    target_stake: number;
+    expires_at?: string;
+  }) {
+    const response = await axios.post("/api/challenges", params, {
+      headers: this.getHeaders(),
+    });
+    return response.data;
+  }
+
+  async joinChallenge(id: string, params: { side: "X" | "Y"; amount: number }) {
+    const response = await axios.post(`/api/challenges/${id}/join`, params, {
+      headers: this.getHeaders(),
+    });
+    return response.data;
+  }
+
+  async resolveChallenge(id: string, winningSide: "X" | "Y") {
+    const response = await axios.post(`/api/challenges/${id}/resolve`, { winningSide }, {
+      headers: this.getHeaders(),
+    });
     return response.data;
   }
 }

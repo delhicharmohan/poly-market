@@ -18,134 +18,180 @@ export default function AssetSelector({
     connectionStatus,
 }: AssetSelectorProps) {
     const priceUp = priceChange >= 0;
-    const isLive = connectionStatus === 'connected';
+
+    const statusColor =
+        connectionStatus === 'connected'
+            ? '#00E676'
+            : connectionStatus === 'simulated'
+            ? '#facc15'
+            : '#64748b';
+
+    const statusLabel =
+        connectionStatus === 'connected'
+            ? '● LIVE'
+            : connectionStatus === 'simulated'
+            ? '● SIM'
+            : connectionStatus === 'connecting'
+            ? '○ …'
+            : '○ OFF';
+
+    const priceStr =
+        currentPrice < 10
+            ? currentPrice.toFixed(selectedAsset.decimals)
+            : currentPrice.toFixed(2);
+
+    const changeStr =
+        Math.abs(priceChange) < 0.01
+            ? priceChange.toFixed(5)
+            : priceChange.toFixed(2);
 
     return (
         <div
             style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '8px 16px',
                 background: '#0c1120',
                 borderBottom: '1px solid #1a2340',
-                minHeight: 48,
                 flexShrink: 0,
+                userSelect: 'none',
             }}
         >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                {/* Logo */}
+            {/* ── Row 1: brand + live price + status ── */}
+            <div
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 16px 6px',
+                    gap: 12,
+                }}
+            >
+                {/* Brand */}
                 <div
                     style={{
-                        fontSize: 18,
+                        fontSize: 15,
                         fontWeight: 800,
                         background: 'linear-gradient(135deg, #00E676, #00B0FF)',
                         WebkitBackgroundClip: 'text',
                         WebkitTextFillColor: 'transparent',
                         letterSpacing: -0.5,
+                        flexShrink: 0,
+                        lineHeight: 1,
                     }}
                 >
                     TRADEFLOW
                 </div>
 
-                {/* Asset tabs */}
-                <div
-                    style={{
-                        display: 'flex',
-                        gap: 4,
-                        background: '#0a0e17',
-                        borderRadius: 8,
-                        padding: 3,
-                    }}
-                >
-                    {ASSETS.map((a) => (
-                        <button
-                            key={a.id}
-                            onClick={() => onSelectAsset(a)}
-                            style={{
-                                padding: '5px 10px',
-                                fontSize: 10,
-                                fontWeight: 600,
-                                border:
-                                    selectedAsset.id === a.id
-                                        ? `1px solid ${a.color}44`
-                                        : '1px solid transparent',
-                                borderRadius: 6,
-                                cursor: 'pointer',
-                                fontFamily: 'inherit',
-                                transition: 'all .15s',
-                                background:
-                                    selectedAsset.id === a.id
-                                        ? `linear-gradient(135deg, ${a.color}22, ${a.color}44)`
-                                        : 'transparent',
-                                color: selectedAsset.id === a.id ? a.color : '#64748b',
-                            }}
-                        >
-                            {a.id}
-                        </button>
-                    ))}
-                </div>
-            </div>
+                {/* Spacer */}
+                <div style={{ flex: 1 }} />
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                {/* Connection Status */}
+                {/* Live price + change */}
                 <div
                     style={{
                         display: 'flex',
-                        alignItems: 'center',
-                        gap: 5,
-                        background: isLive ? 'rgba(0,230,118,0.08)' : 'rgba(250,204,21,0.08)',
-                        border: `1px solid ${isLive ? 'rgba(0,230,118,0.2)' : 'rgba(250,204,21,0.2)'}`,
-                        borderRadius: 6,
-                        padding: '4px 10px',
-                        fontSize: 9,
-                        color: isLive ? '#00E676' : '#facc15',
-                        letterSpacing: 1,
-                        fontWeight: 600,
+                        alignItems: 'baseline',
+                        gap: 6,
+                        flexShrink: 0,
                     }}
                 >
                     <span
                         style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: '50%',
-                            background: isLive ? '#00E676' : '#facc15',
-                            animation: 'pulse 2s infinite',
-                            display: 'inline-block',
-                        }}
-                    />
-                    {isLive ? 'LIVE' : 'SIM'}
-                </div>
-
-                {/* Price display (compact in header for mobile) */}
-                <div style={{ textAlign: 'right' }}>
-                    <span
-                        style={{
-                            fontSize: 16,
-                            fontWeight: 800,
+                            fontSize: 17,
+                            fontWeight: 700,
                             color: priceUp ? '#00E676' : '#FF1744',
                             letterSpacing: -0.5,
                             fontVariantNumeric: 'tabular-nums',
                         }}
                     >
-                        {currentPrice < 10
-                            ? currentPrice.toFixed(selectedAsset.decimals)
-                            : currentPrice.toFixed(2)}
+                        {priceStr}
                     </span>
                     <span
                         style={{
-                            fontSize: 10,
-                            color: priceUp ? '#00E676' : '#FF1744',
+                            fontSize: 11,
                             fontWeight: 600,
-                            marginLeft: 6,
+                            color: priceUp ? '#00E676' : '#FF1744',
                         }}
                     >
-                        {priceUp ? '▲' : '▼'}{' '}
-                        {Math.abs(priceChange) < 0.01
-                            ? priceChange.toFixed(5)
-                            : priceChange.toFixed(2)}
+                        {priceUp ? '▲' : '▼'} {changeStr}
                     </span>
                 </div>
+
+                {/* Status badge */}
+                <div
+                    style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: statusColor,
+                        letterSpacing: 0.5,
+                        flexShrink: 0,
+                        background: `${statusColor}18`,
+                        border: `1px solid ${statusColor}33`,
+                        borderRadius: 6,
+                        padding: '3px 7px',
+                        lineHeight: 1.4,
+                    }}
+                >
+                    {statusLabel}
+                </div>
+            </div>
+
+            {/* ── Row 2: scrollable asset tabs ── */}
+            <div
+                style={{
+                    display: 'flex',
+                    gap: 4,
+                    padding: '0 12px 10px',
+                    overflowX: 'auto',
+                    msOverflowStyle: 'none',
+                    scrollbarWidth: 'none',
+                    WebkitOverflowScrolling: 'touch',
+                }}
+            >
+                {ASSETS.map((a) => {
+                    const isActive = selectedAsset.id === a.id;
+                    return (
+                        <button
+                            key={a.id}
+                            onClick={() => onSelectAsset(a)}
+                            style={{
+                                padding: '5px 12px',
+                                fontSize: 11,
+                                fontWeight: 600,
+                                border: isActive
+                                    ? `1px solid ${a.color}66`
+                                    : '1px solid transparent',
+                                borderRadius: 7,
+                                cursor: 'pointer',
+                                fontFamily: 'inherit',
+                                transition: 'all .18s cubic-bezier(0.4,0,0.2,1)',
+                                background: isActive
+                                    ? `linear-gradient(135deg, ${a.color}22, ${a.color}44)`
+                                    : 'rgba(255,255,255,0.04)',
+                                color: isActive ? a.color : '#64748b',
+                                whiteSpace: 'nowrap',
+                                flexShrink: 0,
+                                boxShadow: isActive
+                                    ? `0 0 0 1px ${a.color}22`
+                                    : 'none',
+                                letterSpacing: 0.2,
+                            }}
+                            onMouseEnter={(e) => {
+                                if (!isActive) {
+                                    e.currentTarget.style.background =
+                                        'rgba(255,255,255,0.08)';
+                                    e.currentTarget.style.color = '#94a3b8';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (!isActive) {
+                                    e.currentTarget.style.background =
+                                        'rgba(255,255,255,0.04)';
+                                    e.currentTarget.style.color = '#64748b';
+                                }
+                            }}
+                        >
+                            {a.label}
+                        </button>
+                    );
+                })}
             </div>
         </div>
     );

@@ -74,6 +74,43 @@ class IndimarketAPI {
       throw error;
     }
   }
+
+  // --- IPL Endpoints ---
+
+  async getIplTournaments(): Promise<any> {
+    const headers = this.getHeaders();
+    const response = await axios.get("/api/ipl/tournaments", { headers });
+    return response.data;
+  }
+
+  async getIplMatches(status?: string, date?: string, team?: string): Promise<any> {
+    const headers = this.getHeaders();
+    const params: Record<string, string> = {};
+    if (status) params.status = status;
+    if (date) params.date = date;
+    if (team) params.team = team;
+    
+    const response = await axios.get("/api/ipl/matches", { headers, params });
+    return response.data;
+  }
+
+  async getIplMatchDetail(matchKey: string): Promise<any> {
+    const headers = this.getHeaders();
+    const response = await axios.get(`/api/ipl/matches/${matchKey}`, { headers });
+    return response.data;
+  }
+
+  async getIplMatchContests(matchKey: string): Promise<any> {
+    const headers = this.getHeaders();
+    const response = await axios.get(`/api/ipl/matches/${matchKey}/contests`, { headers });
+    return response.data;
+  }
+
+  async getIplMicroContests(matchKey: string): Promise<any> {
+    const headers = this.getHeaders();
+    const response = await axios.get(`/api/ipl/matches/${matchKey}/micro`, { headers });
+    return response.data;
+  }
 }
 
 export const api = new IndimarketAPI();
