@@ -8,6 +8,11 @@ const require = createRequire(import.meta.url);
 process.env.WS_NO_BUFFER_UTIL = 'true';
 const WebSocket = require('ws');
 
+interface TickPoint {
+    price: number;
+    time: number;
+}
+
 interface GlobalWithWS {
     _veloraWS?: any;
     _binanceWS?: any;
@@ -15,9 +20,14 @@ interface GlobalWithWS {
     _lastVeloraAttempt?: number;
     _lastBinanceAttempt?: number;
     _lastFinnhubAttempt?: number;
+    _tickStore?: Record<string, TickPoint[]>;
+    _latestPrices?: Record<string, { price: number; timestamp: number }>;
 }
 
 const g = global as unknown as GlobalWithWS;
+
+if (!g._tickStore) g._tickStore = {};
+if (!g._latestPrices) g._latestPrices = {};
 
 export { WebSocket };
 
@@ -38,3 +48,36 @@ export function setLastBinanceAttempt(t: number) { g._lastBinanceAttempt = t; }
 
 export function getLastFinnhubAttempt() { return g._lastFinnhubAttempt || 0; }
 export function setLastFinnhubAttempt(t: number) { g._lastFinnhubAttempt = t; }
+
+const MAX_TICK_AGE = 5 * 60 * 1000; // 5 minutes
+
+export function pushTick(assetId: string, price: number, time: number = Date.now()) {
+    // Update latest cache
+    if (!g._latestPrices) g._latestPrices = {};
+    if (!g._tickStore) g._tickStore = {};
+    
+    g._latestPrices[assetId] = { price, timestamp: time };
+
+    if (!g._tickStore[assetId]) g._tickStore[assetId] = [];
+    const points = g._tickStore[assetId];
+    
+    // Deduplicate/throttle: only one point per second for the buffer
+    const last = points[points.length - 1];
+    if (last && time - last.time < 1000) return;
+
+    points.push({ price, time });
+    
+    // Evict old points
+    const cutoff = time - MAX_TICK_AGE;
+    while (points.length > 0 && points[0].time < cutoff) {
+        points.shift();
+    }
+}
+
+export function getTickStore() {
+    return g._tickStore || {};
+}
+
+export function getLatestPrices() {
+    return g._latestPrices || {};
+}

@@ -10,7 +10,7 @@ import { getFinnhubWS } from '@/lib/trading/server-ws';
 // We store the latest price for each symbol in-memory
 const priceCache: Record<string, { price: number; timestamp: number }> = {};
 
-import { latestPrices } from '../trading/history/route';
+import { getLatestPrices } from '@/lib/trading/server-ws';
 
 export async function GET() {
     const ws = getFinnhubWS();
@@ -18,6 +18,6 @@ export async function GET() {
 
     return NextResponse.json({
         status,
-        prices: latestPrices
+        prices: getLatestPrices()
     });
 }

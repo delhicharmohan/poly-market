@@ -170,8 +170,8 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
               </div>
               <div>
                 <span className="font-medium">Odds:</span>{" "}
-                {wagerResult.odds?.[wagerResult.selection] != null
-                  ? `${Number(wagerResult.odds[wagerResult.selection]).toFixed(2)}x`
+                {wagerResult.odds?.[wagerResult.selection as "yes" | "no"] != null
+                  ? `${Number(wagerResult.odds[wagerResult.selection as "yes" | "no"]).toFixed(2)}x`
                   : "—"}
               </div>
               <div>
@@ -181,7 +181,7 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
                   if (fromB2B != null && !isNaN(fromB2B) && fromB2B >= 0) {
                     return `$${Number(fromB2B).toFixed(2)} (after commission)`;
                   }
-                  const oddsVal = wagerResult.odds?.[wagerResult.selection];
+                  const oddsVal = wagerResult.odds?.[wagerResult.selection as "yes" | "no"];
                   const computed = typeof oddsVal === "number" && oddsVal > 0 ? wagerResult.stake * oddsVal : 0;
                   if (computed > wagerResult.stake) {
                     return `$${computed.toFixed(2)} (before commission)`;

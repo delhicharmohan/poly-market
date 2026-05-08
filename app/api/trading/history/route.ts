@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
-import { WebSocket, getBinanceWS, setBinanceWS, getLastBinanceAttempt, setLastBinanceAttempt, getFinnhubWS, setFinnhubWS, getLastFinnhubAttempt, setLastFinnhubAttempt } from '@/lib/trading/server-ws';
+import { WebSocket, getBinanceWS, setBinanceWS, getLastBinanceAttempt, setLastBinanceAttempt, getFinnhubWS, setFinnhubWS, getLastFinnhubAttempt, setLastFinnhubAttempt, pushTick, getTickStore } from '@/lib/trading/server-ws';
 
 /**
  * Historical Data & Tick Buffer
@@ -12,39 +12,6 @@ interface Candle {
     high: number;
     low: number;
     close: number;
-}
-
-interface TickPoint {
-    price: number;
-    time: number;
-}
-
-// ─── Global Tick Store (In-Memory) ───
-// Maps assetId -> array of points for the last 5 minutes
-const tickStore: Record<string, TickPoint[]> = {};
-const MAX_TICK_AGE = 5 * 60 * 1000; // 5 minutes
-
-// Cache of the absolute latest price for each symbol
-export const latestPrices: Record<string, { price: number; timestamp: number }> = {};
-
-export function pushTick(assetId: string, price: number, time: number = Date.now()) {
-    // Update latest cache
-    latestPrices[assetId] = { price, timestamp: time };
-
-    if (!tickStore[assetId]) tickStore[assetId] = [];
-    const points = tickStore[assetId];
-    
-    // Deduplicate/throttle: only one point per second for the buffer
-    const last = points[points.length - 1];
-    if (last && time - last.time < 1000) return;
-
-    points.push({ price, time });
-    
-    // Evict old points
-    const cutoff = time - MAX_TICK_AGE;
-    while (points.length > 0 && points[0].time < cutoff) {
-        points.shift();
-    }
 }
 
 // ─── Binance Client-Side Sync ───
@@ -239,6 +206,6 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
         candles,
-        ticks: tickStore[assetId] || []
+        ticks: getTickStore()[assetId] || []
     });
 }

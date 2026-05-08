@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { WebSocket, getVeloraWS, setVeloraWS, getLastVeloraAttempt, setLastVeloraAttempt } from '@/lib/trading/server-ws';
-import { pushTick } from '../trading/history/route';
+import { WebSocket, getVeloraWS, setVeloraWS, getLastVeloraAttempt, setLastVeloraAttempt, pushTick } from '@/lib/trading/server-ws';
 
 /**
  * Velora WebSocket Bridge — Server-Side
