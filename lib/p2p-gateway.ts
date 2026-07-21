@@ -1,6 +1,6 @@
 import crypto from "crypto";
 
-const DEFAULT_BASE_URL = "https://sandbox-api.platform.com/v1";
+
 
 export interface P2PPayinParams {
   amountInr: number;
@@ -41,10 +41,10 @@ export interface P2PPayoutResponse {
 function getP2PConfig() {
   const apiKey = process.env.P2P_API_KEY;
   const webhookSecret = process.env.P2P_WEBHOOK_SECRET;
-  const baseUrl = (process.env.P2P_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, "");
+  const baseUrl = (process.env.P2P_BASE_URL || "").replace(/\/$/, "");
 
-  if (!apiKey || !webhookSecret) {
-    throw new Error("P2P environment variables P2P_API_KEY and P2P_WEBHOOK_SECRET must be defined");
+  if (!apiKey || !webhookSecret || !baseUrl) {
+    throw new Error("P2P environment variables P2P_API_KEY, P2P_WEBHOOK_SECRET, and P2P_BASE_URL must be defined");
   }
 
   return { apiKey, webhookSecret, baseUrl };
@@ -120,21 +120,7 @@ export async function createP2PPayin(params: P2PPayinParams): Promise<P2PPayinRe
     console.log("[P2P Payin] Request payload:", JSON.stringify(payload));
   }
 
-  // Intercept dead sandbox domain and route to local checkout simulator
-  if (baseUrl.includes("sandbox-api.platform.com")) {
-    console.log("[P2P Payin Mock] Intercepted request to non-existent sandbox API. Routing to local simulator.");
-    const mockTxnId = `pay_${crypto.randomBytes(12).toString("hex")}`;
-    
-    // Construct local simulator URL
-    const localSimulatorUrl = `/merchandise/checkout-simulator?orderId=${encodeURIComponent(params.externalRef)}&amount=${encodeURIComponent(params.amountInr)}&returnUrl=${encodeURIComponent(params.returnUrl)}&txnId=${encodeURIComponent(mockTxnId)}`;
-    
-    return {
-      txn_id: mockTxnId,
-      checkout_url: localSimulatorUrl,
-      expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-      status: "created",
-    };
-  }
+
 
   const res = await fetch(url, {
     method: "POST",
@@ -201,16 +187,7 @@ export async function createP2PPayout(params: P2PPayoutParams): Promise<P2PPayou
     console.log("[P2P Payout] Request payload:", JSON.stringify(payload));
   }
 
-  // Intercept dead sandbox domain and route to local payout mock
-  if (baseUrl.includes("sandbox-api.platform.com")) {
-    console.log("[P2P Payout Mock] Intercepted request to non-existent sandbox API. Simulating success.");
-    const mockTxnId = `out_${crypto.randomBytes(12).toString("hex")}`;
-    return {
-      txn_id: mockTxnId,
-      status: "created",
-      expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-    };
-  }
+
 
   const res = await fetch(url, {
     method: "POST",
