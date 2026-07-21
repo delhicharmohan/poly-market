@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "@/lib/db";
 import { createPayout } from "@/lib/xpaysafe";
+import { createP2PPayout } from "@/lib/p2p-gateway";
 
 function getUserId(request: NextRequest): string | null {
   return request.headers.get("X-User-ID");
@@ -13,7 +14,7 @@ function generatePayoutOrderId(): string {
 }
 
 /**
- * Initiate xpaysafe payout (withdrawal) for a user.
+ * Initiate payout (withdrawal) for a user.
  * Deducts from wallet balance and sends payout to beneficiary bank account.
  */
 export async function POST(request: NextRequest) {
@@ -72,22 +73,40 @@ export async function POST(request: NextRequest) {
     );
     const walletTransactionId = wtResult.rows[0].id;
 
-    // Call xpaysafe payout
+    // Call dynamic payout (P2P platform or fallback to xpaysafe)
     let payoutResponse;
+    let usedGateway = "xpaysafe";
     try {
-      payoutResponse = await createPayout({
-        orderId,
-        amount: withdrawAmount,
-        currency: "INR",
-        beneficiary_details: {
-          name: beneficiaryName,
-          accountNumber,
-          ifsc,
-          bankName: bankName || "Bank",
-          address: "India",
-        },
-        timestamp,
-      });
+      if (process.env.P2P_API_KEY) {
+        usedGateway = "p2p";
+        payoutResponse = await createP2PPayout({
+          amountInr: withdrawAmount,
+          externalRef: orderId,
+          payoutMode: "imps",
+          beneficiary: {
+            account_number: accountNumber,
+            ifsc,
+            name: beneficiaryName,
+          },
+          metadata: {
+            user_id: userIdDb,
+          },
+        });
+      } else {
+        payoutResponse = await createPayout({
+          orderId,
+          amount: withdrawAmount,
+          currency: "INR",
+          beneficiary_details: {
+            name: beneficiaryName,
+            accountNumber,
+            ifsc,
+            bankName: bankName || "Bank",
+            address: "India",
+          },
+          timestamp,
+        });
+      }
     } catch (payoutError: any) {
       // Reverse the wallet deduction if payout API call itself fails
       const revertBalance = newBalance + withdrawAmount;
@@ -101,6 +120,7 @@ export async function POST(request: NextRequest) {
 
     // Track payout in pending_payouts for webhook-driven status updates / refunds
     try {
+      const responseCast = payoutResponse as any;
       await pool.query(
         `INSERT INTO pending_payouts (order_id, user_id, amount_inr, beneficiary_name, account_number, ifsc, gateway_transaction_id, wallet_transaction_id, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PENDING')`,
@@ -111,7 +131,7 @@ export async function POST(request: NextRequest) {
           beneficiaryName,
           accountNumber,
           ifsc,
-          payoutResponse.transactionId || null,
+          responseCast.txn_id || responseCast.transactionId || null,
           walletTransactionId,
         ]
       );
@@ -120,13 +140,14 @@ export async function POST(request: NextRequest) {
       console.error("[payout] Failed to insert pending_payouts record:", trackingError.message);
     }
 
+    const finalResponse = payoutResponse as any;
     return NextResponse.json({
       success: true,
       orderId,
-      transactionId: payoutResponse.transactionId,
-      status: payoutResponse.status || "PENDING",
+      transactionId: finalResponse.txn_id || finalResponse.transactionId,
+      status: finalResponse.status || "PENDING",
       balance: newBalance,
-      message: "Payout initiated successfully",
+      message: `Payout initiated successfully via ${usedGateway}`,
     });
   } catch (error: any) {
     console.error("Payout error:", error);

@@ -87,6 +87,8 @@ function MerchandiseContent() {
     return buildPaintingsForAmount(Math.round(depositAmount));
   }, [depositAmount]);
 
+  const [activeTab, setActiveTab] = useState<"gateway" | "p2p">("p2p");
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
@@ -113,10 +115,33 @@ function MerchandiseContent() {
           </button>
         </div>
 
-        <div className="mb-8">
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
             Merchandise
           </h1>
+          {/* Tab Selector */}
+          <div className="inline-flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl border border-slate-300/40 dark:border-slate-700/40">
+            <button
+              onClick={() => setActiveTab("gateway")}
+              className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
+                activeTab === "gateway"
+                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white"
+              }`}
+            >
+              💳 Standard Gateway
+            </button>
+            <button
+              onClick={() => setActiveTab("p2p")}
+              className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
+                activeTab === "p2p"
+                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white"
+              }`}
+            >
+              ⚡ P2P (UPI Transfer)
+            </button>
+          </div>
         </div>
 
         {/* Message: free coins for Indimarket on any painting buy */}
@@ -138,6 +163,9 @@ function MerchandiseContent() {
                 </div>
                 <div className="text-3xl font-bold text-slate-900 dark:text-white">
                   {formatINR(depositAmount)}
+                </div>
+                <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  Method: <span className="font-semibold">{activeTab === "gateway" ? "XPaySafe Gateway" : "P2P UPI Aggregator"}</span>
                 </div>
               </div>
               <ShoppingBag className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
@@ -198,6 +226,7 @@ function MerchandiseContent() {
                               paintingName: painting.name,
                               paintingImageUrl: painting.image,
                               amountInr: painting.price,
+                              gateway: activeTab,
                             });
                             setPurchasingId(null);
                             const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));

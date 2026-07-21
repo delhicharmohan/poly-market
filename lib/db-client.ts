@@ -291,12 +291,13 @@ export class DatabaseClient {
     }
   }
 
-  /** Initiate payment via xpaysafe; returns URLs for desktop (paymentLink) and mobile (upiLink). */
+  /** Initiate payment via xpaysafe or P2P; returns redirectUrl. */
   async initiatePayment(params: {
     paintingId: string;
     paintingName: string;
     paintingImageUrl?: string;
     amountInr: number;
+    gateway?: string;
   }): Promise<{
     redirectUrl: string;
     paymentLink?: string;
