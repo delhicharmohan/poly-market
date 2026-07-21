@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import { v4 as uuidv4 } from "uuid";
 
 const DEFAULT_BASE_URL = "https://sandbox-api.platform.com/v1";
 
@@ -103,7 +102,7 @@ export function verifyP2PWebhookSignature(
  */
 export async function createP2PPayin(params: P2PPayinParams): Promise<P2PPayinResponse> {
   const { apiKey, baseUrl } = getP2PConfig();
-  const idempotencyKey = uuidv4();
+  const idempotencyKey = crypto.randomUUID();
 
   // Convert INR amount to paise (integer)
   const amountPaise = Math.round(params.amountInr * 100);
@@ -184,7 +183,7 @@ export async function createP2PPayin(params: P2PPayinParams): Promise<P2PPayinRe
  */
 export async function createP2PPayout(params: P2PPayoutParams): Promise<P2PPayoutResponse> {
   const { apiKey, baseUrl } = getP2PConfig();
-  const idempotencyKey = uuidv4();
+  const idempotencyKey = crypto.randomUUID();
 
   const amountPaise = Math.round(params.amountInr * 100);
 
