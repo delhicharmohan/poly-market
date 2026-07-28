@@ -76,9 +76,26 @@ export async function POST(request: NextRequest) {
     // Call dynamic payout (P2P platform or fallback to xpaysafe)
     let payoutResponse;
     let usedGateway = "xpaysafe";
+    
+    // Query default payout gateway from database configuration if set
     try {
+      const gatewaySettingResult = await pool.query(
+        "SELECT value FROM gateway_settings WHERE key = 'payout_gateway'"
+      );
+      if (gatewaySettingResult.rows.length > 0) {
+        usedGateway = gatewaySettingResult.rows[0].value;
+      } else if (process.env.P2P_API_KEY) {
+        usedGateway = "p2p";
+      }
+    } catch (dbErr) {
+      console.error("Failed to query payout_gateway setting, using env fallback:", dbErr);
       if (process.env.P2P_API_KEY) {
         usedGateway = "p2p";
+      }
+    }
+
+    try {
+      if (usedGateway === "p2p" && process.env.P2P_API_KEY) {
         payoutResponse = await createP2PPayout({
           amountInr: withdrawAmount,
           externalRef: orderId,

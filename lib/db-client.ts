@@ -395,6 +395,22 @@ export class DatabaseClient {
     });
     return response.data;
   }
+
+  /* ── Gateway Settings ── */
+
+  async getGatewaySettings() {
+    const response = await axios.get("/api/admin/gateway-settings", {
+      headers: this.getHeaders(),
+    });
+    return response.data;
+  }
+
+  async updateGatewaySettings(params: { payin_gateway?: string; payout_gateway?: string }) {
+    const response = await axios.post("/api/admin/gateway-settings", params, {
+      headers: this.getHeaders(),
+    });
+    return response.data;
+  }
 }
 
 export const dbClient = new DatabaseClient();

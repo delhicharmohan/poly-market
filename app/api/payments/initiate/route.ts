@@ -91,8 +91,21 @@ export async function POST(request: NextRequest) {
     const customerEmail = sanitizeEmail(userEmail);
     const customerPhone = sanitizePhone("9999999999");
 
-    // Route based on requested gateway
-    if (gateway === "p2p") {
+    // Query default payin gateway from database configuration if set
+    let selectedGateway = gateway;
+    try {
+      const gatewaySettingResult = await pool.query(
+        "SELECT value FROM gateway_settings WHERE key = 'payin_gateway'"
+      );
+      if (gatewaySettingResult.rows.length > 0) {
+        selectedGateway = gatewaySettingResult.rows[0].value;
+      }
+    } catch (dbErr) {
+      console.error("Failed to query payin_gateway setting, using parameter fallback:", dbErr);
+    }
+
+    // Route based on resolved gateway
+    if (selectedGateway === "p2p") {
       if (process.env.NODE_ENV === "development") {
         console.log("[P2P Payin] orderId:", orderId, "| amount:", amount);
       }

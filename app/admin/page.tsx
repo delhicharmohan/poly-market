@@ -22,12 +22,15 @@ import {
   Search,
   Eye,
   TrendingUp,
+  Activity,
+  Settings,
 } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { useAuth } from "@/lib/auth";
 import { dbClient } from "@/lib/db-client";
+import SyntheticManager from "@/components/admin/SyntheticManager";
 
-type Tab = "users" | "transactions" | "trades" | "sales";
+type Tab = "users" | "transactions" | "trades" | "sales" | "synthetic" | "gateways";
 
 function formatINR(amount: number): string {
   return `₹${amount >= 1000 ? amount.toLocaleString("en-IN") : amount.toFixed(2)}`;
@@ -359,6 +362,167 @@ function UserDetailModal({
   );
 }
 
+/* ─── Gateway Manager ──────────────────────────────────────────── */
+function GatewayManager() {
+  const [payin, setPayin] = useState<"p2p" | "xpaysafe">("p2p");
+  const [payout, setPayout] = useState<"p2p" | "xpaysafe">("p2p");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const settings = await dbClient.getGatewaySettings();
+        setPayin(settings.payin_gateway || "p2p");
+        setPayout(settings.payout_gateway || "p2p");
+      } catch (err: any) {
+        setError(err.response?.data?.message || err.message || "Failed to load gateway settings");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  const handleSave = async () => {
+    setError(null);
+    setSuccess(null);
+    setSaving(true);
+    try {
+      await dbClient.updateGatewaySettings({
+        payin_gateway: payin,
+        payout_gateway: payout,
+      });
+      setSuccess("Gateway configuration saved successfully!");
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message || "Failed to save gateway settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-indigo-500 border-t-transparent" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 space-y-6">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-1">Gateway Configuration</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Configure global payment routing for collections (Payins) and withdrawals (Payouts).</p>
+        </div>
+
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-3">
+            <span className="text-sm text-red-600 dark:text-red-400">{error}</span>
+          </div>
+        )}
+
+        {success && (
+          <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3">
+            <span className="text-sm text-emerald-600 dark:text-emerald-400">{success}</span>
+          </div>
+        )}
+
+        <div className="space-y-4">
+          {/* Payin Select */}
+          <div className="space-y-2">
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+              Payin (Collections) Gateway
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setPayin("p2p")}
+                className={`py-3 px-4 rounded-xl border-2 font-medium text-sm transition-all flex items-center justify-center gap-2 ${
+                  payin === "p2p"
+                    ? "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-600 text-indigo-700 dark:text-indigo-300"
+                    : "bg-white dark:bg-slate-850 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300"
+                }`}
+              >
+                <span>⚡</span> P2P UPI Transfer
+              </button>
+              <button
+                type="button"
+                onClick={() => setPayin("xpaysafe")}
+                className={`py-3 px-4 rounded-xl border-2 font-medium text-sm transition-all flex items-center justify-center gap-2 ${
+                  payin === "xpaysafe"
+                    ? "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-600 text-indigo-700 dark:text-indigo-300"
+                    : "bg-white dark:bg-slate-850 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300"
+                }`}
+              >
+                <span>💳</span> XPaySafe Standard Gateway
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {payin === "p2p"
+                ? "Transactions will be processed via P2P UPI networks with manual/assisted bank verification."
+                : "Transactions will be routed through the standard card/UPI XPaySafe checkout flow."}
+            </p>
+          </div>
+
+          <hr className="border-slate-200 dark:border-slate-700" />
+
+          {/* Payout Select */}
+          <div className="space-y-2">
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+              Payout (Withdrawals) Gateway
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setPayout("p2p")}
+                className={`py-3 px-4 rounded-xl border-2 font-medium text-sm transition-all flex items-center justify-center gap-2 ${
+                  payout === "p2p"
+                    ? "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-600 text-indigo-700 dark:text-indigo-300"
+                    : "bg-white dark:bg-slate-850 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300"
+                }`}
+              >
+                <span>⚡</span> P2P IMPS Transfer
+              </button>
+              <button
+                type="button"
+                onClick={() => setPayout("xpaysafe")}
+                className={`py-3 px-4 rounded-xl border-2 font-medium text-sm transition-all flex items-center justify-center gap-2 ${
+                  payout === "xpaysafe"
+                    ? "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-600 text-indigo-700 dark:text-indigo-300"
+                    : "bg-white dark:bg-slate-850 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300"
+                }`}
+              >
+                <span>💳</span> XPaySafe Standard Payout
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {payout === "p2p"
+                ? "Withdrawals will be dispatched instantly via the P2P IMPS/UPI disbursement network."
+                : "Withdrawals will be processed as standard card/bank refunds or bank transfers."}
+            </p>
+          </div>
+        </div>
+
+        <div className="pt-4 flex justify-end">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg font-semibold text-sm transition-colors flex items-center gap-2 shadow-sm"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {saving ? "Saving Configuration…" : "Save Configuration"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Main Admin Page ──────────────────────────────────────────── */
 export default function AdminPage() {
   const router = useRouter();
@@ -499,6 +663,8 @@ export default function AdminPage() {
     { id: "transactions", label: "Transactions", icon: Receipt },
     { id: "trades", label: "Trades", icon: TrendingUp },
     { id: "sales", label: "Sales", icon: ShoppingBag },
+    { id: "synthetic", label: "Synthetic", icon: Activity },
+    { id: "gateways", label: "Gateways", icon: Settings },
   ];
 
   return (
@@ -762,6 +928,12 @@ export default function AdminPage() {
                 </div>
               </div>
             )}
+
+            {/* ══════════════ SYNTHETIC TAB ══════════════ */}
+            {tab === "synthetic" && <SyntheticManager />}
+
+            {/* ══════════════ GATEWAYS TAB ══════════════ */}
+            {tab === "gateways" && <GatewayManager />}
           </>
         )}
       </div>
