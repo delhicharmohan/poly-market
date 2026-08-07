@@ -29,7 +29,7 @@ function useIsMobile() {
 // ─── Inner component that uses MarketData context ───
 function TradingDashboard() {
     const { user, loading: authLoading } = useAuth();
-    const { state: marketState, getAssetState } = useMarketData();
+    const { state: marketState, getAssetState, instruments } = useMarketData();
     const [tradingState, tradingDispatch] = useReducer(
         tradingReducer,
         initialTradingState
@@ -41,25 +41,33 @@ function TradingDashboard() {
     const [amount, setAmount] = useState(100);
     const [timeframe, setTimeframe] = useState<Timeframe>(TIMEFRAMES[1]);
     const [showHistory, setShowHistory] = useState(false);
+    const [tradeError, setTradeError] = useState<string | null>(null);
+    // Guards against double-submit during the async wallet debit.
+    const placingRef = useRef(false);
+
+    // Auto-dismiss the trade error toast.
+    useEffect(() => {
+        if (!tradeError) return;
+        const t = setTimeout(() => setTradeError(null), 3500);
+        return () => clearTimeout(t);
+    }, [tradeError]);
 
     const assetState = getAssetState(selectedAsset.id);
     const currentPrice = assetState?.currentPrice ?? selectedAsset.seedPrice;
     const previousPrice = assetState?.previousPrice ?? selectedAsset.seedPrice;
     const candles = assetState?.candles ?? [];
+    const candles1m = assetState?.candles1m ?? [];
     const ticks = assetState?.ticks ?? [];
     const connectionStatus = assetState?.connectionStatus ?? 'connecting';
 
     // Trade expiry checker — runs every 250ms
     useEffect(() => {
         const interval = setInterval(() => {
-            // Build current prices map from all assets
+            // Build current prices map from all known assets (real + synthetic)
             const currentPrices: Record<string, number> = {};
-            ASSETS.forEach((a) => {
-                const state = marketState.assets[a.id];
-                if (state) {
-                    currentPrices[a.id] = state.currentPrice;
-                }
-            });
+            for (const [id, s] of Object.entries(marketState.assets)) {
+                currentPrices[id] = s.currentPrice;
+            }
 
             tradingDispatch({ type: 'UPDATE_TRADES', currentPrices });
         }, 250);
@@ -108,29 +116,43 @@ function TradingDashboard() {
     }, [tradingState.history]);
 
     const handleTrade = useCallback(
-        (direction: 'up' | 'down') => {
-            if (amount > tradingState.balance) return; // double check
+        async (direction: 'up' | 'down') => {
+            if (placingRef.current) return; // a debit is already in flight
+            if (amount > tradingState.balance) return; // client-side guard
 
+            // Lock the entry price at click time (it can move during the await).
+            const entryPrice = currentPrice;
             const arrow = direction === 'up' ? '▲' : '▼';
             const dirLabel = direction === 'up' ? 'CALL' : 'PUT';
             const tfLabel = timeframe.label;
-            const priceStr = currentPrice < 10 ? currentPrice.toFixed(5) : currentPrice.toFixed(2);
+            const priceStr = entryPrice < 10 ? entryPrice.toFixed(5) : entryPrice.toFixed(2);
             const tradeDesc = `Trade: ${arrow} ${dirLabel} ${selectedAsset.id} @ ${priceStr} → $${amount.toFixed(2)} (${tfLabel})`;
 
-            // Dispatch trade immediately for instant UI feedback
-            tradingDispatch({
-                type: 'PLACE_TRADE',
-                asset: selectedAsset.id,
-                direction,
-                amount,
-                entryPrice: currentPrice,
-                timeframe,
-            });
-
-            // Withdraw from real wallet in the background (non-blocking)
-            wallet.withdraw(amount, tradeDesc).catch(e => {
-                console.error("Trade withdrawal failed:", e);
-            });
+            placingRef.current = true;
+            try {
+                // Debit the real wallet FIRST; only open the trade if it clears.
+                const ok = await wallet.withdraw(amount, tradeDesc);
+                if (!ok) {
+                    setTradeError('Trade rejected — insufficient balance or wallet error.');
+                    return;
+                }
+                tradingDispatch({
+                    type: 'PLACE_TRADE',
+                    asset: selectedAsset.id,
+                    direction,
+                    amount,
+                    entryPrice,
+                    timeframe,
+                });
+                // Keep the local balance authoritative with the wallet's post-debit value.
+                tradingDispatch({ type: 'RESET_BALANCE', amount: wallet.getBalanceSync() });
+            } catch (e: any) {
+                const insufficient = e?.message?.includes('Insufficient');
+                setTradeError(insufficient ? 'Trade rejected — insufficient balance.' : 'Trade failed — please try again.');
+                console.error('Trade withdrawal failed:', e);
+            } finally {
+                placingRef.current = false;
+            }
         },
         [selectedAsset.id, amount, currentPrice, timeframe, tradingState.balance]
     );
@@ -166,8 +188,32 @@ function TradingDashboard() {
                 userSelect: 'none',
             }}
         >
+            {/* Trade error toast */}
+            {tradeError && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: 16,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        zIndex: 1000,
+                        background: '#7f1d1d',
+                        border: '1px solid #ef4444',
+                        color: '#fee2e2',
+                        padding: '10px 18px',
+                        borderRadius: 10,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                    }}
+                >
+                    {tradeError}
+                </div>
+            )}
+
             {/* Top Bar */}
             <AssetSelector
+                assets={instruments}
                 selectedAsset={selectedAsset}
                 onSelectAsset={setSelectedAsset}
                 currentPrice={currentPrice}
@@ -272,6 +318,7 @@ function TradingDashboard() {
                         <div style={{ flex: 1, minHeight: 0 }}>
                             <CandlestickChart
                                 candles={candles}
+                                candles1m={candles1m}
                                 ticks={ticks}
                                 currentPrice={currentPrice}
                                 trades={allTrades}

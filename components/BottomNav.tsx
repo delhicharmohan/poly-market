@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { Home, History, Zap, Wallet, CandlestickChart } from "lucide-react";
+import { Home, History, Wallet, CandlestickChart } from "lucide-react";
 
 export default function BottomNav() {
   const pathname = usePathname();
@@ -25,12 +25,6 @@ export default function BottomNav() {
       label: "History",
       icon: History,
       active: pathname === "/transactions",
-    },
-    {
-      href: "/challenges",
-      label: "Challenges",
-      icon: Zap,
-      active: pathname.startsWith("/challenges"),
     },
     {
       href: "/wallet",

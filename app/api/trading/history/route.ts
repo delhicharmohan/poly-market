@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
-import { WebSocket, getBinanceWS, setBinanceWS, getLastBinanceAttempt, setLastBinanceAttempt, getFinnhubWS, setFinnhubWS, getLastFinnhubAttempt, setLastFinnhubAttempt, pushTick, getTickStore } from '@/lib/trading/server-ws';
+import { getTickStore } from '@/lib/trading/server-ws';
+import { ensureBinanceConnected } from '@/lib/trading/server/binance-bridge';
+import { ensureFinnhubConnected } from '@/lib/trading/server/finnhub-bridge';
+import { ensureSyntheticRunning, getSyntheticHistory } from '@/lib/trading/synthetic/engine';
+import { loadRecentCandles } from '@/lib/trading/synthetic/store';
 
 /**
  * Historical Data & Tick Buffer
@@ -14,114 +18,13 @@ interface Candle {
     close: number;
 }
 
-// ─── Binance Client-Side Sync ───
-function startBinanceSync() {
-    const currentWS = getBinanceWS();
-    if (currentWS && (currentWS.readyState === WebSocket.OPEN || currentWS.readyState === WebSocket.CONNECTING)) {
-        return;
-    }
-
-    const now = Date.now();
-    if (now - getLastBinanceAttempt() < 5000) return;
-    setLastBinanceAttempt(now);
-    
-    console.log('[History API] Starting server-side Binance sync...');
-    const symbols = ['btcusdt', 'ethusdt', 'paxgusdt'];
-    const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${symbols.map(s => `${s}@ticker`).join('/')}`);
-    
-    ws.on('message', (data: any) => {
-        try {
-            const msg = JSON.parse(data.toString());
-            const id = msg.s === 'BTCUSDT' ? 'BTC/USD' : msg.s === 'ETHUSDT' ? 'ETH/USD' : 'GOLD';
-            pushTick(id, parseFloat(msg.c), Date.now());
-        } catch {}
-    });
-    
-    ws.on('close', () => {
-        setBinanceWS(null);
-    });
-
-    ws.on('error', () => {
-        setBinanceWS(null);
-    });
-
-    setBinanceWS(ws);
-}
-
-// ─── Finnhub Server-Side Sync ───
-function startFinnhubSync() {
-    const currentWS = getFinnhubWS();
-    if (currentWS && (currentWS.readyState === WebSocket.OPEN || currentWS.readyState === WebSocket.CONNECTING)) {
-        return;
-    }
-
-    const now = Date.now();
-    if (now - getLastFinnhubAttempt() < 5000) return;
-    setLastFinnhubAttempt(now);
-    
-    const apiKey = process.env.NEXT_PUBLIC_FINNHUB_API_KEY;
-    if (!apiKey) {
-        console.error('[History API] Finnhub Sync ERR: NEXT_PUBLIC_FINNHUB_API_KEY is missing');
-        return;
-    }
-
-    console.log('[History API] Finnhub Sync: Attempting connection...');
-    try {
-        const ws = new WebSocket(`wss://ws.finnhub.io?token=${apiKey}`);
-
-        ws.on('open', () => {
-            console.log('[History API] Finnhub Sync: SUCCESS - Connected');
-            const symbols = ['AAPL', 'BINANCE:BTCUSDT', 'BINANCE:ETHUSDT', 'OANDA:EUR_USD'];
-            symbols.forEach(symbol => {
-                ws.send(JSON.stringify({ type: 'subscribe', symbol }));
-            });
-        });
-
-        ws.on('message', (data: any) => {
-            try {
-                const msg = JSON.parse(data.toString());
-                if (msg.type === 'trade' && Array.isArray(msg.data)) {
-                    const symbolMap: Record<string, string> = {
-                        'AAPL': 'AAPL',
-                        'BINANCE:BTCUSDT': 'BTC-FH',
-                        'BINANCE:ETHUSDT': 'ETH-FH',
-                        'OANDA:EUR_USD': 'EURUSD-FH'
-                    };
-
-                    msg.data.forEach((trade: any) => {
-                        const internalId = symbolMap[trade.s] || trade.s;
-                        pushTick(internalId, trade.p, trade.t || Date.now());
-                    });
-                }
-            } catch (e) {
-                console.warn('[History API] Finnhub Sync: Parse error', e);
-            }
-        });
-
-        ws.on('close', (code: number, reason: string) => {
-            console.warn(`[History API] Finnhub Sync: Closed (Code: ${code}, Reason: ${reason})`);
-            setFinnhubWS(null);
-        });
-
-        ws.on('error', (err: any) => {
-            console.error('[History API] Finnhub Sync: WebSocket Error:', err);
-            setFinnhubWS(null);
-        });
-
-        setFinnhubWS(ws);
-    } catch (e) {
-        console.error('[History API] Finnhub Sync: Setup Error:', e);
-    }
-}
-
-// ─── Historical Candles Cache ───
 const candleCache: Record<string, { candles: Candle[]; timestamp: number }> = {};
-const CACHE_DURATION = 5 * 60 * 1000; 
+const CACHE_DURATION = 5 * 60 * 1000;
 
 const BINANCE_SYMBOL_MAP: Record<string, string> = {
     'BTC/USD': 'BTCUSDT',
     'ETH/USD': 'ETHUSDT',
-    'GOLD': 'PAXGUSDT',
+    GOLD: 'PAXGUSDT',
 };
 
 const TWELVE_DATA_SYMBOL_MAP: Record<string, string> = {
@@ -129,24 +32,15 @@ const TWELVE_DATA_SYMBOL_MAP: Record<string, string> = {
     'GBP/USD': 'GBP/USD',
     'USD/JPY': 'USD/JPY',
     'AUD/USD': 'AUD/USD',
-    'SILVER': 'XAG/USD',
+    SILVER: 'XAG/USD',
 };
-
-/**
- * Fetches 1-minute historical candles from Binance (Crypto) or Twelve Data (Forex)
- */
-async function fetchHistoricalData(assetId: string): Promise<Candle[]> {
-    if (BINANCE_SYMBOL_MAP[assetId]) {
-        return fetchBinanceHistory(assetId);
-    } else {
-        return fetchTwelveDataHistory(assetId);
-    }
-}
 
 async function fetchBinanceHistory(assetId: string): Promise<Candle[]> {
     const symbol = BINANCE_SYMBOL_MAP[assetId];
     try {
-        const response = await axios.get(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1m&limit=10`);
+        const response = await axios.get(
+            `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1m&limit=10`
+        );
         return response.data.map((c: any) => ({
             time: c[0],
             open: parseFloat(c[1]),
@@ -160,32 +54,50 @@ async function fetchBinanceHistory(assetId: string): Promise<Candle[]> {
 }
 
 async function fetchTwelveDataHistory(assetId: string): Promise<Candle[]> {
-    const apiKey = process.env.NEXT_PUBLIC_TWELVEDATA_API_KEY;
+    const apiKey = process.env.TWELVEDATA_API_KEY || process.env.NEXT_PUBLIC_TWELVEDATA_API_KEY;
     if (!apiKey) return [];
 
     try {
-        const response = await axios.get(`https://api.twelvedata.com/time_series?symbol=${assetId}&interval=1min&outputsize=10&apikey=${apiKey}`);
+        const response = await axios.get(
+            `https://api.twelvedata.com/time_series?symbol=${assetId}&interval=1min&outputsize=10&apikey=${apiKey}`
+        );
         if (!response.data.values) return [];
-        
-        return response.data.values.map((v: any) => ({
-            time: new Date(v.datetime).getTime(),
-            open: parseFloat(v.open),
-            high: parseFloat(v.high),
-            low: parseFloat(v.low),
-            close: parseFloat(v.close),
-        })).reverse();
+
+        return response.data.values
+            .map((v: any) => ({
+                time: new Date(v.datetime).getTime(),
+                open: parseFloat(v.open),
+                high: parseFloat(v.high),
+                low: parseFloat(v.low),
+                close: parseFloat(v.close),
+            }))
+            .reverse();
     } catch (e) {
         return [];
     }
 }
 
 export async function GET(request: Request) {
-    if (!getBinanceWS()) startBinanceSync();
-    if (!getFinnhubWS()) startFinnhubSync();
+    // Boot bridges lazily; the SSE stream also boots them.
+    ensureBinanceConnected();
+    ensureFinnhubConnected();
 
     const { searchParams } = new URL(request.url);
     const assetId = searchParams.get('asset');
     if (!assetId) return NextResponse.json({ error: 'Missing asset parameter' }, { status: 400 });
+
+    // Synthetic indices are generated in-process; serve their recent 1s candles
+    // from memory plus the persisted 1-minute history from the DB (for long windows).
+    ensureSyntheticRunning();
+    const synthetic = getSyntheticHistory(assetId);
+    if (synthetic) {
+        const candles1m = await loadRecentCandles(assetId, 1500);
+        return NextResponse.json({
+            candles: synthetic.candles,
+            candles1m,
+            ticks: getTickStore()[assetId] || [],
+        });
+    }
 
     const now = Date.now();
     let candles: Candle[] = [];
@@ -206,6 +118,6 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
         candles,
-        ticks: getTickStore()[assetId] || []
+        ticks: getTickStore()[assetId] || [],
     });
 }

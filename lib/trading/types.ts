@@ -21,7 +21,7 @@ export interface Candle {
 export interface Asset {
     id: string;
     label: string;
-    provider: 'binance' | 'twelvedata' | 'finnhub' | 'velora';
+    provider: 'binance' | 'finnhub' | 'velora' | 'synthetic';
     /** WebSocket symbol identifier for the provider */
     wsSymbol: string;
     /** Velora instrument token (only for velora provider) */
@@ -64,6 +64,8 @@ export interface AssetState {
     currentPrice: number;
     previousPrice: number;
     candles: Candle[];
+    /** Persisted 1-minute candles from the DB (synthetic indices), for long windows. */
+    candles1m?: Candle[];
     ticks: TickPoint[];
     connectionStatus: ConnectionStatus;
     lastTickTime: number;
@@ -102,6 +104,44 @@ export const ASSETS: Asset[] = [
         volatility: 0.001,
         decimals: 2,
     },
+    {
+        id: 'BTC-FH',
+        label: 'BTC (FH)',
+        provider: 'finnhub',
+        wsSymbol: 'BINANCE:BTCUSDT',
+        seedPrice: 70000,
+        color: '#F59E0B',
+        volatility: 0.004,
+        decimals: 2,
+    },
+    {
+        id: 'ETH-FH',
+        label: 'ETH (FH)',
+        provider: 'finnhub',
+        wsSymbol: 'BINANCE:ETHUSDT',
+        seedPrice: 3500,
+        color: '#6366F1',
+        volatility: 0.005,
+        decimals: 2,
+    },
+    {
+        id: 'EURUSD-FH',
+        label: 'EUR/USD (FH)',
+        provider: 'finnhub',
+        wsSymbol: 'OANDA:EUR_USD',
+        seedPrice: 1.08,
+        color: '#10B981',
+        volatility: 0.0005,
+        decimals: 5,
+    },
+];
+
+// Assets hidden from the UI until their upstream feed is reliable.
+// - EUR/USD, GBP/USD, SILVER: velora feed returns only frozen/partial snapshots
+//   (and an unreliable precision/divisor). Re-enable once velora streams live data.
+// - AAPL: finnhub feed produced no ticks.
+// To restore one, move its entry back into the ASSETS array above.
+export const DISABLED_ASSETS: Asset[] = [
     {
         id: 'EUR/USD',
         label: 'EUR/USD',
@@ -144,36 +184,6 @@ export const ASSETS: Asset[] = [
         color: '#A2AAAD', // Apple Silver
         volatility: 0.002,
         decimals: 2,
-    },
-    {
-        id: 'BTC-FH',
-        label: 'BTC (FH)',
-        provider: 'finnhub',
-        wsSymbol: 'BINANCE:BTCUSDT',
-        seedPrice: 70000,
-        color: '#F59E0B',
-        volatility: 0.004,
-        decimals: 2,
-    },
-    {
-        id: 'ETH-FH',
-        label: 'ETH (FH)',
-        provider: 'finnhub',
-        wsSymbol: 'BINANCE:ETHUSDT',
-        seedPrice: 3500,
-        color: '#6366F1',
-        volatility: 0.005,
-        decimals: 2,
-    },
-    {
-        id: 'EURUSD-FH',
-        label: 'EUR/USD (FH)',
-        provider: 'finnhub',
-        wsSymbol: 'OANDA:EUR_USD',
-        seedPrice: 1.08,
-        color: '#10B981',
-        volatility: 0.0005,
-        decimals: 5,
     },
 ];
 

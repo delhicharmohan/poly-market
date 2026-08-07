@@ -49,3 +49,5 @@ firebase-debug.log
 # Database backups
 *.sql.backup
 backup.sql
+.gstack/
+.claude/

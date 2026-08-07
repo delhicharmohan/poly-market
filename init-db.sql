@@ -114,3 +114,15 @@ DROP TRIGGER IF EXISTS update_wagers_updated_at ON wagers;
 CREATE TRIGGER update_wagers_updated_at BEFORE UPDATE ON wagers
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+
+-- Synthetic index minute candles (DB-backed price history for the trade chart)
+CREATE TABLE IF NOT EXISTS synthetic_candles (
+    symbol TEXT NOT NULL,
+    ts     BIGINT NOT NULL,
+    open   DOUBLE PRECISION NOT NULL,
+    high   DOUBLE PRECISION NOT NULL,
+    low    DOUBLE PRECISION NOT NULL,
+    close  DOUBLE PRECISION NOT NULL,
+    PRIMARY KEY (symbol, ts)
+);
+CREATE INDEX IF NOT EXISTS idx_synth_candles_symbol_ts ON synthetic_candles(symbol, ts DESC);

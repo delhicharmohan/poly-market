@@ -1,10 +1,56 @@
 'use client';
 
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useState, type ReactNode } from 'react';
 import { Candle, Asset, Trade } from '@/lib/trading/types';
+
+type ChartMode = 'candles' | 'line';
+
+const INTERVALS: { label: string; ms: number }[] = [
+    { label: '1s', ms: 1000 },
+    { label: '5s', ms: 5000 },
+    { label: '15s', ms: 15000 },
+    { label: '1m', ms: 60000 },
+];
+
+const WINDOWS: { label: string; ms: number }[] = [
+    { label: '1m', ms: 60000 },
+    { label: '5m', ms: 300000 },
+    { label: '15m', ms: 900000 },
+    { label: 'All', ms: Infinity },
+];
+
+/** Aggregate 1s base candles into larger interval candles (OHLC per bucket). */
+function aggregateCandles(candles: Candle[], intervalMs: number): Candle[] {
+    if (intervalMs <= 1000) return candles;
+    const buckets = new Map<number, Candle>();
+    const order: number[] = [];
+    for (const c of candles) {
+        const key = Math.floor(c.time / intervalMs) * intervalMs;
+        const b = buckets.get(key);
+        if (!b) {
+            buckets.set(key, { open: c.open, high: c.high, low: c.low, close: c.close, time: key });
+            order.push(key);
+        } else {
+            b.high = Math.max(b.high, c.high);
+            b.low = Math.min(b.low, c.low);
+            b.close = c.close;
+        }
+    }
+    return order.map((k) => buckets.get(k)!);
+}
+
+/** Merge two candle series by bucket time; entries in `b` win on collision. */
+function mergeByTime(a: Candle[], b: Candle[]): Candle[] {
+    const map = new Map<number, Candle>();
+    for (const c of a) map.set(c.time, c);
+    for (const c of b) map.set(c.time, c);
+    return [...map.keys()].sort((x, y) => x - y).map((k) => map.get(k)!);
+}
 
 interface SmoothChartProps {
     candles: Candle[];
+    /** Persisted 1-minute candles from the DB (long history for 1m+ intervals). */
+    candles1m?: Candle[];
     ticks: { price: number; time: number }[];
     currentPrice: number;
     trades: Trade[];
@@ -13,6 +59,7 @@ interface SmoothChartProps {
 
 export default function CandlestickChart({
     candles,
+    candles1m = [],
     ticks,
     currentPrice,
     trades,
@@ -20,17 +67,20 @@ export default function CandlestickChart({
 }: SmoothChartProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
-    const animFrameRef = useRef<number>(0);
     const priceHistoryRef = useRef<Map<string, { price: number; time: number }[]>>(new Map());
     const lastPriceRef = useRef(0);
     const lastAssetRef = useRef('');
+
+    const [mode, setMode] = useState<ChartMode>('candles');
+    const [intervalMs, setIntervalMs] = useState(1000);
+    const [windowMs, setWindowMs] = useState(300000); // 5m default
 
     // Clear tick history when asset changes or initialize from ticks prop
     useEffect(() => {
         if (lastAssetRef.current !== asset.id) {
             lastAssetRef.current = asset.id;
             lastPriceRef.current = 0;
-            
+
             // Initialize history with buffered ticks from server
             if (ticks && ticks.length > 0) {
                 priceHistoryRef.current.set(asset.id, [...ticks]);
@@ -40,21 +90,29 @@ export default function CandlestickChart({
         }
     }, [asset.id, ticks]);
 
-    // Accumulate tick prices into a per-asset price history
+    // Accumulate tick prices into a per-asset price history.
+    // Skip the asset's seed price: before the first real tick lands, the consumer
+    // falls back to asset.seedPrice, which would otherwise be recorded as a fake
+    // data point and render as a spike in the middle of the chart.
     useEffect(() => {
-        if (currentPrice > 0 && currentPrice !== lastPriceRef.current) {
+        if (currentPrice > 0 && currentPrice !== asset.seedPrice && currentPrice !== lastPriceRef.current) {
             lastPriceRef.current = currentPrice;
             if (!priceHistoryRef.current.has(asset.id)) {
                 priceHistoryRef.current.set(asset.id, []);
             }
             const history = priceHistoryRef.current.get(asset.id)!;
             history.push({ price: currentPrice, time: Date.now() });
-            // Keep last 600 ticks
-            if (history.length > 600) {
-                priceHistoryRef.current.set(asset.id, history.slice(-600));
+            // Keep enough ticks to cover the largest line-mode window (~20 min at 1/s)
+            if (history.length > 1200) {
+                priceHistoryRef.current.set(asset.id, history.slice(-1200));
             }
         }
     }, [currentPrice, asset.id]);
+
+    const fmt = useCallback(
+        (p: number) => (p < 10 ? p.toFixed(asset.decimals) : p.toFixed(2)),
+        [asset.decimals]
+    );
 
     const draw = useCallback(() => {
         const canvas = canvasRef.current;
@@ -83,24 +141,7 @@ export default function CandlestickChart({
         ctx.fillStyle = '#0a0e17';
         ctx.fillRect(0, 0, W, H);
 
-        // Build price points from historical candles + live ticks
-        const pricePoints: { price: number; time: number }[] = [];
-
-        // Add candle close prices as historical points
-        if (candles.length > 0) {
-            candles.forEach(c => {
-                pricePoints.push({ price: c.close, time: c.time });
-            });
-        }
-
-        // Add live tick prices for this asset
-        const assetHistory = priceHistoryRef.current.get(asset.id) || [];
-        assetHistory.forEach(p => {
-            pricePoints.push(p);
-        });
-
-        if (pricePoints.length < 2) {
-            // Loading state
+        const showLoading = () => {
             ctx.fillStyle = '#4a5568';
             ctx.font = "14px 'JetBrains Mono', monospace";
             ctx.textAlign = 'center';
@@ -110,28 +151,79 @@ export default function CandlestickChart({
             ctx.beginPath();
             ctx.arc(W / 2, H / 2 + 15, 4, 0, Math.PI * 2);
             ctx.fill();
-            animFrameRef.current = requestAnimationFrame(draw);
-            return;
+        };
+
+        // Live line points = candle closes + accumulated ticks.
+        const pricePoints: { price: number; time: number }[] = [];
+        candles.forEach((c) => pricePoints.push({ price: c.close, time: c.time }));
+        (priceHistoryRef.current.get(asset.id) || []).forEach((p) => pricePoints.push(p));
+
+        // ── Resolve the visible series + price range per mode ──
+        let count = 0;
+        let rawMin = 0;
+        let rawMax = 0;
+        let timeAt: (i: number) => number = () => Date.now();
+        let visibleLine: { price: number; time: number }[] = [];
+        let visibleCandles: Candle[] = [];
+
+        const cutoff = windowMs === Infinity ? -Infinity : Date.now() - windowMs;
+
+        if (mode === 'candles') {
+            // For 1m+ intervals, build from the persisted DB history merged with
+            // the live tail (1s candles aggregated to 1m). Sub-minute intervals
+            // use the recent in-memory 1s candles only.
+            const base =
+                intervalMs >= 60000 && candles1m.length > 0
+                    ? mergeByTime(candles1m, aggregateCandles(candles, 60000))
+                    : candles;
+            const agg = aggregateCandles(base, intervalMs);
+            let windowed = agg.filter((c) => c.time >= cutoff);
+            // Cap drawn candles for perf/legibility.
+            if (windowed.length > 400) windowed = windowed.slice(-400);
+            // Live "forming" candle: fold the current price into the last bucket.
+            if (windowed.length > 0 && currentPrice > 0 && currentPrice !== asset.seedPrice) {
+                const last = { ...windowed[windowed.length - 1] };
+                last.close = currentPrice;
+                last.high = Math.max(last.high, currentPrice);
+                last.low = Math.min(last.low, currentPrice);
+                windowed = [...windowed.slice(0, -1), last];
+            }
+            if (windowed.length < 2) {
+                showLoading();
+                return;
+            }
+            visibleCandles = windowed;
+            rawMin = Math.min(...visibleCandles.map((c) => c.low));
+            rawMax = Math.max(...visibleCandles.map((c) => c.high));
+            count = visibleCandles.length;
+            timeAt = (i) => visibleCandles[i].time;
+        } else {
+            let windowed = pricePoints.filter((p) => p.time >= cutoff);
+            if (windowed.length > 600) windowed = windowed.slice(-600);
+            if (windowed.length < 2) {
+                showLoading();
+                return;
+            }
+            visibleLine = windowed;
+            rawMin = Math.min(...visibleLine.map((p) => p.price));
+            rawMax = Math.max(...visibleLine.map((p) => p.price));
+            count = visibleLine.length;
+            timeAt = (i) => visibleLine[i].time;
         }
 
-        // Use last N points for display
-        const maxPoints = Math.min(pricePoints.length, 200);
-        const visible = pricePoints.slice(-maxPoints);
-
-        const prices = visible.map(p => p.price);
-        const rawMin = Math.min(...prices);
-        const rawMax = Math.max(...prices);
         const rawRange = rawMax - rawMin || 1;
-        
-        // Add dynamic zoom padding (15% top/bottom) based on the current volatility
         const minP = rawMin - rawRange * 0.15;
         const maxP = rawMax + rawRange * 0.15;
         const range = maxP - minP || 1;
 
-        const toX = (i: number) => PADDING.left + (i / (visible.length - 1)) * chartW;
+        const slotW = chartW / count;
+        const toX =
+            mode === 'candles'
+                ? (i: number) => PADDING.left + (i + 0.5) * slotW
+                : (i: number) => PADDING.left + (count > 1 ? i / (count - 1) : 0) * chartW;
         const toY = (p: number) => PADDING.top + (1 - (p - minP) / range) * chartH;
 
-        // Grid lines
+        // ── Grid + price axis ──
         ctx.strokeStyle = 'rgba(30, 41, 59, 0.5)';
         ctx.lineWidth = 0.5;
         for (let i = 0; i <= 5; i++) {
@@ -145,92 +237,113 @@ export default function CandlestickChart({
             ctx.fillStyle = '#384152';
             ctx.font = "10px 'JetBrains Mono', monospace";
             ctx.textAlign = 'left';
-            ctx.fillText(
-                price < 10 ? price.toFixed(4) : price.toFixed(2),
-                W - PADDING.right + 6,
-                y + 3
-            );
+            ctx.fillText(fmt(price), W - PADDING.right + 6, y + 3);
         }
 
-        // X-axis grid lines & time labels (24 HR format)
+        // ── Time axis ──
         ctx.fillStyle = '#64748b';
         ctx.font = "10px 'JetBrains Mono', monospace";
         ctx.textAlign = 'center';
         for (let i = 0; i <= 4; i++) {
-            const idx = Math.floor((i / 4) * (visible.length - 1));
-            const point = visible[idx];
-            if (point) {
-                const x = toX(idx);
-                // Vertical grid line
+            const idx = Math.floor((i / 4) * (count - 1));
+            const x = toX(idx);
+            ctx.strokeStyle = 'rgba(30, 41, 59, 0.5)';
+            ctx.beginPath();
+            ctx.moveTo(x, PADDING.top);
+            ctx.lineTo(x, PADDING.top + chartH);
+            ctx.stroke();
+
+            const date = new Date(timeAt(idx));
+            const timeStr = date.toLocaleTimeString('en-US', {
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+            });
+            ctx.fillText(timeStr, x, H - 6);
+        }
+
+        const GREEN = '#00E676';
+        const RED = '#FF1744';
+
+        if (mode === 'candles') {
+            // ── Candlesticks ──
+            const bodyW = Math.max(1, Math.min(slotW * 0.6, 14));
+            for (let i = 0; i < visibleCandles.length; i++) {
+                const c = visibleCandles[i];
+                const up = c.close >= c.open;
+                const color = up ? GREEN : RED;
+                const x = toX(i);
+
+                // Wick
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 1;
                 ctx.beginPath();
-                ctx.moveTo(x, PADDING.top);
-                ctx.lineTo(x, PADDING.top + chartH);
+                ctx.moveTo(x, toY(c.high));
+                ctx.lineTo(x, toY(c.low));
                 ctx.stroke();
 
-                // 24 HR Time label
-                const date = new Date(point.time);
-                const timeStr = date.toLocaleTimeString('en-US', { 
-                    hour12: false, 
-                    hour: '2-digit', 
-                    minute: '2-digit',
-                    second: '2-digit'
-                });
-                ctx.fillText(timeStr, x, H - 6);
+                // Body
+                const yOpen = toY(c.open);
+                const yClose = toY(c.close);
+                const top = Math.min(yOpen, yClose);
+                const h = Math.max(1, Math.abs(yClose - yOpen));
+                ctx.fillStyle = color;
+                ctx.fillRect(x - bodyW / 2, top, bodyW, h);
             }
+        } else {
+            // ── Smooth line + area ──
+            const isUp = visibleLine[count - 1].price >= visibleLine[0].price;
+            const lineColor = isUp ? GREEN : RED;
+            const gradient = ctx.createLinearGradient(0, PADDING.top, 0, PADDING.top + chartH);
+            gradient.addColorStop(0, isUp ? 'rgba(0, 230, 118, 0.25)' : 'rgba(255, 23, 68, 0.25)');
+            gradient.addColorStop(1, isUp ? 'rgba(0, 230, 118, 0.0)' : 'rgba(255, 23, 68, 0.0)');
+
+            const areaPath = new Path2D();
+            areaPath.moveTo(toX(0), toY(visibleLine[0].price));
+            for (let i = 1; i < count; i++) {
+                const prevX = toX(i - 1);
+                const currX = toX(i);
+                const cpx = (prevX + currX) / 2;
+                areaPath.bezierCurveTo(cpx, toY(visibleLine[i - 1].price), cpx, toY(visibleLine[i].price), currX, toY(visibleLine[i].price));
+            }
+            areaPath.lineTo(toX(count - 1), PADDING.top + chartH);
+            areaPath.lineTo(toX(0), PADDING.top + chartH);
+            areaPath.closePath();
+            ctx.fillStyle = gradient;
+            ctx.fill(areaPath);
+
+            ctx.beginPath();
+            ctx.moveTo(toX(0), toY(visibleLine[0].price));
+            for (let i = 1; i < count; i++) {
+                const prevX = toX(i - 1);
+                const currX = toX(i);
+                const cpx = (prevX + currX) / 2;
+                ctx.bezierCurveTo(cpx, toY(visibleLine[i - 1].price), cpx, toY(visibleLine[i].price), currX, toY(visibleLine[i].price));
+            }
+            ctx.strokeStyle = lineColor;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Pulsing dot at the leading edge
+            const lastX = toX(count - 1);
+            const lastY = toY(visibleLine[count - 1].price);
+            const pulseScale = 1 + 0.3 * Math.sin(Date.now() / 200);
+            const pulseAlpha = 0.3 + 0.2 * Math.sin(Date.now() / 200);
+            ctx.beginPath();
+            ctx.arc(lastX, lastY, 8 * pulseScale, 0, Math.PI * 2);
+            ctx.fillStyle = isUp ? `rgba(0, 230, 118, ${pulseAlpha})` : `rgba(255, 23, 68, ${pulseAlpha})`;
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(lastX, lastY, 3.5, 0, Math.PI * 2);
+            ctx.fillStyle = lineColor;
+            ctx.fill();
+            ctx.strokeStyle = '#0a0e17';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
         }
 
-        // Determine trend color (comparing last price to first visible price)
-        const isUp = visible[visible.length - 1].price >= visible[0].price;
-        const lineColor = isUp ? '#00E676' : '#FF1744';
-        const gradientTop = isUp ? 'rgba(0, 230, 118, 0.25)' : 'rgba(255, 23, 68, 0.25)';
-        const gradientBot = isUp ? 'rgba(0, 230, 118, 0.0)' : 'rgba(255, 23, 68, 0.0)';
-
-        // Draw smooth bezier area fill
-        const gradient = ctx.createLinearGradient(0, PADDING.top, 0, PADDING.top + chartH);
-        gradient.addColorStop(0, gradientTop);
-        gradient.addColorStop(1, gradientBot);
-
-        ctx.beginPath();
-        ctx.moveTo(toX(0), toY(visible[0].price));
-
-        // Smooth bezier curve through points
-        for (let i = 1; i < visible.length; i++) {
-            const prev = { x: toX(i - 1), y: toY(visible[i - 1].price) };
-            const curr = { x: toX(i), y: toY(visible[i].price) };
-            const cpx = (prev.x + curr.x) / 2;
-            ctx.bezierCurveTo(cpx, prev.y, cpx, curr.y, curr.x, curr.y);
-        }
-
-        // Complete area path
-        const areaPath = new Path2D();
-        areaPath.moveTo(toX(0), toY(visible[0].price));
-        for (let i = 1; i < visible.length; i++) {
-            const prev = { x: toX(i - 1), y: toY(visible[i - 1].price) };
-            const curr = { x: toX(i), y: toY(visible[i].price) };
-            const cpx = (prev.x + curr.x) / 2;
-            areaPath.bezierCurveTo(cpx, prev.y, cpx, curr.y, curr.x, curr.y);
-        }
-        areaPath.lineTo(toX(visible.length - 1), PADDING.top + chartH);
-        areaPath.lineTo(toX(0), PADDING.top + chartH);
-        areaPath.closePath();
-
-        ctx.fillStyle = gradient;
-        ctx.fill(areaPath);
-
-        // Draw the line itself
-        ctx.beginPath();
-        ctx.moveTo(toX(0), toY(visible[0].price));
-        for (let i = 1; i < visible.length; i++) {
-            const prev = { x: toX(i - 1), y: toY(visible[i - 1].price) };
-            const curr = { x: toX(i), y: toY(visible[i].price) };
-            const cpx = (prev.x + curr.x) / 2;
-            ctx.bezierCurveTo(cpx, prev.y, cpx, curr.y, curr.x, curr.y);
-        }
-        ctx.strokeStyle = lineColor;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        // Current price horizontal dashed line
+        // ── Current price dashed line + badge (both modes) ──
         const curY = toY(currentPrice);
         ctx.setLineDash([4, 4]);
         ctx.strokeStyle = 'rgba(59, 130, 246, 0.6)';
@@ -241,55 +354,25 @@ export default function CandlestickChart({
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Current price badge
         ctx.fillStyle = '#3B82F6';
         const badgeW = 68;
         const badgeH = 20;
-        const badgeR = 4;
         const bx = W - PADDING.right;
         const by = curY - badgeH / 2;
         ctx.beginPath();
-        ctx.roundRect(bx, by, badgeW, badgeH, badgeR);
+        ctx.roundRect(bx, by, badgeW, badgeH, 4);
         ctx.fill();
         ctx.fillStyle = '#fff';
         ctx.font = "bold 10px 'JetBrains Mono', monospace";
         ctx.textAlign = 'center';
-        ctx.fillText(
-            currentPrice < 10 ? currentPrice.toFixed(asset.decimals) : currentPrice.toFixed(2),
-            bx + badgeW / 2,
-            curY + 4
-        );
+        ctx.fillText(fmt(currentPrice), bx + badgeW / 2, curY + 4);
 
-        // Pulsing dot at the end of the line
-        const lastX = toX(visible.length - 1);
-        const lastY = toY(visible[visible.length - 1].price);
-        const pulseScale = 1 + 0.3 * Math.sin(Date.now() / 200);
-        const pulseAlpha = 0.3 + 0.2 * Math.sin(Date.now() / 200);
-
-        // Outer glow
-        ctx.beginPath();
-        ctx.arc(lastX, lastY, 8 * pulseScale, 0, Math.PI * 2);
-        ctx.fillStyle = isUp
-            ? `rgba(0, 230, 118, ${pulseAlpha})`
-            : `rgba(255, 23, 68, ${pulseAlpha})`;
-        ctx.fill();
-
-        // Inner dot
-        ctx.beginPath();
-        ctx.arc(lastX, lastY, 3.5, 0, Math.PI * 2);
-        ctx.fillStyle = lineColor;
-        ctx.fill();
-        ctx.strokeStyle = '#0a0e17';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-
-        // Active trade markers
+        // ── Active trade markers (both modes) ──
         trades
             .filter((t) => t.status === 'active' && t.asset === asset.id)
             .forEach((trade) => {
                 const tradeY = toY(trade.entryPrice);
-                const tradeColor = trade.direction === 'up' ? '#00E676' : '#FF1744';
-
+                const tradeColor = trade.direction === 'up' ? GREEN : RED;
                 ctx.setLineDash([3, 3]);
                 ctx.strokeStyle = tradeColor;
                 ctx.lineWidth = 1;
@@ -299,12 +382,8 @@ export default function CandlestickChart({
                 ctx.stroke();
                 ctx.setLineDash([]);
 
-                // Entry label
                 const label = `${trade.direction === 'up' ? '▲ CALL' : '▼ PUT'} $${trade.amount}`;
-                ctx.fillStyle =
-                    trade.direction === 'up'
-                        ? 'rgba(0,230,118,0.12)'
-                        : 'rgba(255,23,68,0.12)';
+                ctx.fillStyle = trade.direction === 'up' ? 'rgba(0,230,118,0.12)' : 'rgba(255,23,68,0.12)';
                 ctx.beginPath();
                 ctx.roundRect(PADDING.left, tradeY - 10, 90, 20, 4);
                 ctx.fill();
@@ -313,24 +392,116 @@ export default function CandlestickChart({
                 ctx.textAlign = 'left';
                 ctx.fillText(label, PADDING.left + 6, tradeY + 3);
             });
+    }, [candles, candles1m, currentPrice, trades, asset, mode, intervalMs, windowMs, fmt]);
 
-        // Continue animation loop
-        animFrameRef.current = requestAnimationFrame(draw);
-    }, [candles, currentPrice, trades, asset]);
-
-    // Start/stop animation loop
+    // Keep a ref to the latest draw closure so the single rAF loop below always
+    // paints with fresh data without ever re-subscribing the loop.
+    const drawRef = useRef(draw);
     useEffect(() => {
-        animFrameRef.current = requestAnimationFrame(draw);
-        return () => {
-            if (animFrameRef.current) {
-                cancelAnimationFrame(animFrameRef.current);
-            }
-        };
+        drawRef.current = draw;
     }, [draw]);
 
+    // Exactly one animation loop for the component's lifetime.
+    useEffect(() => {
+        let raf = 0;
+        const loop = () => {
+            drawRef.current();
+            raf = requestAnimationFrame(loop);
+        };
+        raf = requestAnimationFrame(loop);
+        return () => cancelAnimationFrame(raf);
+    }, []);
+
     return (
-        <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
+        <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
             <canvas ref={canvasRef} />
+
+            {/* Chart controls: mode · interval · window */}
+            <div
+                style={{
+                    position: 'absolute',
+                    top: 8,
+                    left: 10,
+                    right: 10,
+                    display: 'flex',
+                    gap: 8,
+                    flexWrap: 'wrap',
+                    zIndex: 5,
+                }}
+            >
+                <ButtonGroup>
+                    {(['candles', 'line'] as ChartMode[]).map((m) => (
+                        <GroupButton key={m} active={mode === m} onClick={() => setMode(m)}>
+                            {m === 'candles' ? '▦ Candles' : '∿ Line'}
+                        </GroupButton>
+                    ))}
+                </ButtonGroup>
+
+                {mode === 'candles' && (
+                    <ButtonGroup>
+                        {INTERVALS.map((iv) => (
+                            <GroupButton key={iv.label} active={intervalMs === iv.ms} onClick={() => setIntervalMs(iv.ms)}>
+                                {iv.label}
+                            </GroupButton>
+                        ))}
+                    </ButtonGroup>
+                )}
+
+                <ButtonGroup>
+                    {WINDOWS.map((w) => (
+                        <GroupButton key={w.label} active={windowMs === w.ms} onClick={() => setWindowMs(w.ms)}>
+                            {w.label}
+                        </GroupButton>
+                    ))}
+                </ButtonGroup>
+            </div>
         </div>
+    );
+}
+
+function ButtonGroup({ children }: { children: ReactNode }) {
+    return (
+        <div
+            style={{
+                display: 'flex',
+                gap: 2,
+                background: 'rgba(12,17,32,0.85)',
+                border: '1px solid #1e293b',
+                borderRadius: 7,
+                padding: 2,
+            }}
+        >
+            {children}
+        </div>
+    );
+}
+
+function GroupButton({
+    active,
+    onClick,
+    children,
+}: {
+    active: boolean;
+    onClick: () => void;
+    children: ReactNode;
+}) {
+    return (
+        <button
+            onClick={onClick}
+            style={{
+                padding: '3px 9px',
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: 0.3,
+                border: 'none',
+                borderRadius: 5,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                background: active ? '#1e293b' : 'transparent',
+                color: active ? '#e2e8f0' : '#64748b',
+            }}
+        >
+            {children}
+        </button>
     );
 }

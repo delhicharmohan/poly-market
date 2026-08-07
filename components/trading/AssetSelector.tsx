@@ -1,8 +1,9 @@
 'use client';
 
-import { Asset, ConnectionStatus, ASSETS } from '@/lib/trading/types';
+import { Asset, ConnectionStatus } from '@/lib/trading/types';
 
 interface AssetSelectorProps {
+    assets: Asset[];
     selectedAsset: Asset;
     onSelectAsset: (asset: Asset) => void;
     currentPrice: number;
@@ -11,6 +12,7 @@ interface AssetSelectorProps {
 }
 
 export default function AssetSelector({
+    assets,
     selectedAsset,
     onSelectAsset,
     currentPrice,
@@ -145,7 +147,7 @@ export default function AssetSelector({
                     WebkitOverflowScrolling: 'touch',
                 }}
             >
-                {ASSETS.map((a) => {
+                {assets.map((a) => {
                     const isActive = selectedAsset.id === a.id;
                     return (
                         <button

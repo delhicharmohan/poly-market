@@ -509,7 +509,7 @@ function DesktopTradingPanel({
                 </button>
             </div>
             
-            {/* Demo badge container */}
+            {/* Live trading badge */}
             <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
                 <div
                     style={{
@@ -527,7 +527,7 @@ function DesktopTradingPanel({
                     }}
                 >
                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#00E676', boxShadow: '0 0 8px #00E676' }} />
-                    DEMO TRADING ACTIVE
+                    LIVE TRADING ACTIVE
                 </div>
             </div>
         </div>
