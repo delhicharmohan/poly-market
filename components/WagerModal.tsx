@@ -83,6 +83,34 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
     }
   };
 
+  // Calculate percentage share for current selection
+  const getPercentForSelection = (selKey: string): number => {
+    const key = selKey.toLowerCase();
+    if (market.probabilities && typeof market.probabilities[key] === "number") {
+      const p = market.probabilities[key];
+      return p <= 1 ? p * 100 : p;
+    }
+    if (market.metrics && market.metrics[key] != null) {
+      const m = market.metrics[key];
+      if (typeof m === "number") return m <= 1 ? m * 100 : m;
+      if (typeof m === "object" && m.probability) {
+        const parsed = parseFloat(String(m.probability).replace("%", ""));
+        if (!isNaN(parsed)) return parsed;
+      }
+    }
+    if (isMulti) {
+      const poolAmt = typeof market.pools?.[key] === "number"
+        ? (market.pools[key] as number)
+        : parseFloat(String(market.pools?.[key] || market.pool_data?.[key] || "0")) || 0;
+      if (totalPool > 0 && poolAmt > 0) return (poolAmt / totalPool) * 100;
+      return options.length > 0 ? 100 / options.length : 50;
+    } else {
+      if (key === "yes") return poolYes > 0 && totalPool > 0 ? (poolYes / totalPool) * 100 : 50;
+      if (key === "no") return poolNo > 0 && totalPool > 0 ? (poolNo / totalPool) * 100 : 50;
+      return 50;
+    }
+  };
+
   const selectedOdds = getOddsForSelection(selection);
   const stakeAmount = parseFloat(stake) || 0;
   const potentialWin = stakeAmount * selectedOdds;
@@ -178,10 +206,18 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
     }
   };
 
+  // Determine uniform grid layout for option buttons in modal
+  const getGridColsClass = (count: number) => {
+    if (count <= 2) return "grid-cols-2";
+    if (count === 3) return "grid-cols-3";
+    if (count === 4) return "grid-cols-2 sm:grid-cols-4";
+    return "grid-cols-2 sm:grid-cols-3";
+  };
+
   if (success && wagerResult) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6">
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-slate-900 dark:text-white">
               Wager Placed Successfully!
@@ -194,44 +230,49 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
             </button>
           </div>
 
-          <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 mb-4">
-            <div className="flex items-center text-green-600 dark:text-green-400 mb-2">
-              <CheckCircle className="h-5 w-5 mr-2" />
-              <span className="font-medium">Status: {wagerResult.status}</span>
+          <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl p-4 mb-5">
+            <div className="flex items-center text-emerald-600 dark:text-emerald-400 mb-3">
+              <CheckCircle className="h-5 w-5 mr-2 flex-shrink-0" />
+              <span className="font-bold">Status: {wagerResult.status}</span>
             </div>
             <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
-              <div>
-                <span className="font-medium">Wager ID:</span> {wagerResult.wagerId}
+              <div className="flex justify-between border-b border-emerald-100 dark:border-emerald-900/40 pb-1">
+                <span className="font-medium text-slate-500 dark:text-slate-400">Wager ID:</span>
+                <span className="font-mono text-xs">{wagerResult.wagerId}</span>
               </div>
-              <div>
-                <span className="font-medium">Selection:</span> {getSelectionLabel(wagerResult.selection)}
+              <div className="flex justify-between border-b border-emerald-100 dark:border-emerald-900/40 pb-1">
+                <span className="font-medium text-slate-500 dark:text-slate-400">Selection:</span>
+                <span className="font-bold text-indigo-600 dark:text-indigo-400">{getSelectionLabel(wagerResult.selection)}</span>
               </div>
-              <div>
-                <span className="font-medium">Stake:</span> ${wagerResult.stake.toFixed(2)}
+              <div className="flex justify-between border-b border-emerald-100 dark:border-emerald-900/40 pb-1">
+                <span className="font-medium text-slate-500 dark:text-slate-400">Stake:</span>
+                <span className="font-bold">${wagerResult.stake.toFixed(2)}</span>
               </div>
-              <div>
-                <span className="font-medium">Odds:</span>{" "}
-                {selectedOdds ? `${selectedOdds.toFixed(2)}x` : "—"}
+              <div className="flex justify-between border-b border-emerald-100 dark:border-emerald-900/40 pb-1">
+                <span className="font-medium text-slate-500 dark:text-slate-400">Odds:</span>
+                <span className="font-bold text-slate-900 dark:text-white">{selectedOdds ? `${selectedOdds.toFixed(2)}x` : "—"}</span>
               </div>
-              <div>
-                <span className="font-medium">Possible winning:</span>{" "}
-                {(() => {
-                  const fromB2B = wagerResult.potentialWin;
-                  if (fromB2B != null && !isNaN(fromB2B) && fromB2B >= 0) {
-                    return `$${Number(fromB2B).toFixed(2)} (after commission)`;
-                  }
-                  if (potentialWin > wagerResult.stake) {
-                    return `$${potentialWin.toFixed(2)} (before commission)`;
-                  }
-                  return "— (calculated at settlement, after commission)";
-                })()}
+              <div className="flex justify-between pt-1">
+                <span className="font-medium text-slate-500 dark:text-slate-400">Possible Winning:</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                  {(() => {
+                    const fromB2B = wagerResult.potentialWin;
+                    if (fromB2B != null && !isNaN(fromB2B) && fromB2B >= 0) {
+                      return `$${Number(fromB2B).toFixed(2)}`;
+                    }
+                    if (potentialWin > wagerResult.stake) {
+                      return `$${potentialWin.toFixed(2)}`;
+                    }
+                    return "—";
+                  })()}
+                </span>
               </div>
             </div>
           </div>
 
           <button
             onClick={handleClose}
-            className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors"
+            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-md hover:shadow-indigo-500/25"
           >
             Close
           </button>
@@ -241,38 +282,44 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 dark:bg-slate-900 rounded-xl shadow-2xl max-w-md w-full p-6">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-700">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded bg-slate-700 flex items-center justify-center">
-              <span className="text-white text-xs">📊</span>
-            </div>
-            <span className="text-white text-sm font-medium">{formattedDate}</span>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center space-x-2">
+            <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-800/50">
+              {isMulti ? "Multi-Option Market" : "Binary Market"}
+            </span>
+            <span className="text-slate-400 text-xs font-medium">• {formattedDate}</span>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white transition-colors"
+            className="text-slate-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-slate-700"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="mb-4">
+        <div className="mb-5">
           <h3 className="text-lg font-bold text-white leading-snug">{market.title}</h3>
         </div>
 
-        {/* Selection Options Pill Selector */}
-        <div className="mb-5">
-          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-            Select Outcome
+        {/* Outcome Selection Grid (Aligned Grid across all Option Counts) */}
+        <div className="mb-6">
+          <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2.5">
+            Select Your Outcome
           </label>
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          <div className={`grid gap-2.5 ${getGridColsClass(options.length)}`}>
             {options.map((optLabel) => {
               const optKey = optLabel.toLowerCase();
               const isSelected = selection === optKey;
               const oddsVal = getOddsForSelection(optKey);
+              const percentVal = getPercentForSelection(optKey);
+
+              const isYes = optKey === "yes";
+              const isNo = optKey === "no";
+              const displayLabel = !isMulti && isYes ? "Buy Yes" : !isMulti && isNo ? "Buy No" : optLabel;
+
               return (
                 <button
                   key={optKey}
@@ -281,14 +328,23 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
                     setSelection(optKey);
                     setError(null);
                   }}
-                  className={`flex-1 py-2.5 px-3 rounded-lg border text-sm font-bold transition-all flex flex-col items-center justify-center whitespace-nowrap min-w-[70px] ${
+                  className={`relative p-3 rounded-xl border text-center transition-all flex flex-col items-center justify-center min-h-[60px] touch-manipulation ${
                     isSelected
-                      ? "bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400"
-                      : "bg-slate-700/60 border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white"
+                      ? "bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-600/30 ring-2 ring-indigo-400 font-bold scale-[1.02]"
+                      : "bg-slate-700/60 border-slate-600 text-slate-300 hover:bg-slate-700 hover:border-slate-500 font-semibold"
                   }`}
                 >
-                  <span>{optLabel}</span>
-                  <span className="text-xs font-semibold opacity-80 mt-0.5">{oddsVal.toFixed(2)}x</span>
+                  <span className="text-xs sm:text-sm uppercase truncate w-full leading-tight text-center">
+                    {displayLabel}
+                  </span>
+                  <div className="flex items-center justify-center gap-1.5 mt-1 text-xs">
+                    <span className={`font-black ${isSelected ? "text-white" : "text-slate-200"}`}>
+                      {oddsVal.toFixed(2)}x
+                    </span>
+                    <span className={`text-[10px] font-medium ${isSelected ? "text-indigo-200" : "text-slate-400"}`}>
+                      ({percentVal.toFixed(0)}%)
+                    </span>
+                  </div>
                 </button>
               );
             })}
@@ -296,66 +352,76 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
         </div>
 
         {error && (
-          <div className="mb-4 bg-red-900/20 border border-red-800 rounded-lg p-3">
+          <div className="mb-4 bg-red-900/30 border border-red-800 rounded-xl p-3">
             <div className="flex items-center text-red-400">
-              <AlertCircle className="h-4 w-4 mr-2" />
+              <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0" />
               <span className="text-sm">{error}</span>
             </div>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Amount Input and Increment Buttons */}
-          <div className="flex items-center gap-2">
-            <div className="flex-1 relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white text-lg">$</span>
-              <input
-                type="number"
-                value={stake}
-                onChange={(e) => {
-                  const inputValue = e.target.value;
-                  const numValue = parseFloat(inputValue);
-                  if (!isNaN(numValue)) {
-                    const cappedValue = Math.min(numValue, balance);
-                    setStake(cappedValue.toFixed(2));
-                  } else {
-                    setStake(inputValue);
-                  }
-                  setError(null);
-                }}
-                onBlur={(e) => {
-                  const numValue = parseFloat(e.target.value);
-                  if (!isNaN(numValue)) {
-                    const cappedValue = Math.min(Math.max(numValue, 0.01), balance);
-                    setStake(cappedValue.toFixed(2));
-                  }
-                }}
-                step="0.01"
-                min="0.01"
-                max={balance}
-                required
-                className="w-full pl-8 pr-4 py-3 bg-slate-700 dark:bg-slate-800 border border-slate-600 rounded-lg text-white text-lg font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                placeholder="0.00"
-              />
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Amount Input and Quick Increment Buttons */}
+          <div>
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                Wager Amount
+              </label>
+              <span className="text-xs font-medium text-slate-400">
+                Available: ${balance.toFixed(2)}
+              </span>
             </div>
-            <button
-              type="button"
-              onClick={() => handleIncrement(1)}
-              className="px-4 py-3 bg-slate-700 dark:bg-slate-800 hover:bg-slate-600 dark:hover:bg-slate-700 text-white rounded-lg font-medium transition-colors touch-manipulation border border-slate-600"
-            >
-              +1
-            </button>
-            <button
-              type="button"
-              onClick={() => handleIncrement(10)}
-              className="px-4 py-3 bg-slate-700 dark:bg-slate-800 hover:bg-slate-600 dark:hover:bg-slate-700 text-white rounded-lg font-medium transition-colors touch-manipulation border border-slate-600"
-            >
-              +10
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white text-lg font-bold">$</span>
+                <input
+                  type="number"
+                  value={stake}
+                  onChange={(e) => {
+                    const inputValue = e.target.value;
+                    const numValue = parseFloat(inputValue);
+                    if (!isNaN(numValue)) {
+                      const cappedValue = Math.min(numValue, balance);
+                      setStake(cappedValue.toFixed(2));
+                    } else {
+                      setStake(inputValue);
+                    }
+                    setError(null);
+                  }}
+                  onBlur={(e) => {
+                    const numValue = parseFloat(e.target.value);
+                    if (!isNaN(numValue)) {
+                      const cappedValue = Math.min(Math.max(numValue, 0.01), balance);
+                      setStake(cappedValue.toFixed(2));
+                    }
+                  }}
+                  step="0.01"
+                  min="0.01"
+                  max={balance}
+                  required
+                  className="w-full pl-8 pr-4 py-3 bg-slate-700/80 border border-slate-600 rounded-xl text-white text-lg font-bold focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                  placeholder="0.00"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => handleIncrement(1)}
+                className="px-3.5 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold transition-all border border-slate-600 touch-manipulation"
+              >
+                +$1
+              </button>
+              <button
+                type="button"
+                onClick={() => handleIncrement(10)}
+                className="px-3.5 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold transition-all border border-slate-600 touch-manipulation"
+              >
+                +$10
+              </button>
+            </div>
           </div>
 
           {/* Slider */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <input
               type="range"
               min="0"
@@ -368,22 +434,22 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
                 background: `linear-gradient(to right, #6366f1 0%, #6366f1 ${sliderValue}%, #374151 ${sliderValue}%, #374151 100%)`
               }}
             />
-            <div className="flex justify-between text-xs text-slate-400">
+            <div className="flex justify-between text-xs font-semibold text-slate-400">
               <span>$0</span>
               <span>${balance.toFixed(2)}</span>
             </div>
           </div>
 
-          {/* Buy Button */}
+          {/* Place Wager Button */}
           <button
             type="submit"
             disabled={loading || !stake || parseFloat(stake) <= 0 || parseFloat(stake) > balance}
-            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-lg font-semibold text-lg transition-colors flex flex-col items-center justify-center touch-manipulation"
+            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl font-bold text-base transition-all shadow-lg hover:shadow-emerald-600/25 flex flex-col items-center justify-center touch-manipulation"
           >
-            <span>Buy {getSelectionLabel(selection)}</span>
-            {stakeAmount > 0 && (
-              <span className="text-emerald-200 text-sm font-normal mt-1">
-                To win ${potentialWin.toFixed(2)}
+            <span>{loading ? "Placing Wager..." : `Confirm Wager on ${getSelectionLabel(selection)}`}</span>
+            {stakeAmount > 0 && !loading && (
+              <span className="text-emerald-100 text-xs font-normal mt-0.5">
+                To win ${potentialWin.toFixed(2)} ({selectedOdds.toFixed(2)}x)
               </span>
             )}
           </button>
