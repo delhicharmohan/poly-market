@@ -132,6 +132,14 @@ export async function POST(request: NextRequest) {
     // 3. Local Record Keeping (Success)
     if (wagerData && wagerData.wagerId) {
       try {
+        // Ensure wagers table allows custom selections (drop old yes/no check constraint if present)
+        try {
+          await pool.query("ALTER TABLE wagers DROP CONSTRAINT IF EXISTS wagers_selection_check");
+          await pool.query("ALTER TABLE wagers ALTER COLUMN selection TYPE VARCHAR(100)");
+        } catch (_) {
+          // Ignore table alter errors if user doesn't have DDL permissions or constraint already dropped
+        }
+
         // Ensure market exists in local DB for foreign key constraint
         await pool.query(
           `INSERT INTO markets (id, title, status, pool_yes, pool_no, total_pool)
@@ -140,11 +148,30 @@ export async function POST(request: NextRequest) {
           [body.marketId, body.marketTitle || "Market", 0, 0, 0]
         );
 
-        // B2B may omit odds (e.g. pari-mutuel); use fallbacks so we can still record locally
-        const oddsYes = wagerData.odds?.yes ?? 1;
-        const oddsNo = wagerData.odds?.no ?? 1;
-        const oddsForSelection = body.selection === "yes" ? oddsYes : oddsNo;
-        const potentialWin = stakeAmount * oddsForSelection;
+        // Lowercase selection as required by v2.0 spec
+        const selectionKey = String(body.selection || "").toLowerCase().trim();
+
+        // Extract odds for selection from odds or metrics
+        let oddsForSelection = 1;
+        if (wagerData.odds && wagerData.odds[selectionKey] != null) {
+          const oVal = wagerData.odds[selectionKey];
+          oddsForSelection = typeof oVal === "number" ? oVal : (oVal?.decimalOdds || 1);
+        } else if (wagerData.metrics && wagerData.metrics[selectionKey] != null) {
+          const mVal = wagerData.metrics[selectionKey];
+          oddsForSelection = typeof mVal === "number" ? mVal : (mVal?.decimalOdds || 1);
+        } else if (selectionKey === "yes" && wagerData.odds?.yes != null) {
+          const oVal = wagerData.odds.yes;
+          oddsForSelection = typeof oVal === "number" ? oVal : (oVal?.decimalOdds || 1);
+        } else if (selectionKey === "no" && wagerData.odds?.no != null) {
+          const oVal = wagerData.odds.no;
+          oddsForSelection = typeof oVal === "number" ? oVal : (oVal?.decimalOdds || 1);
+        }
+
+        const potentialWin = wagerData.potentialWin || (stakeAmount * oddsForSelection);
+
+        const getOddsVal = (val: any) => typeof val === "number" ? val : (val?.decimalOdds || 1);
+        const oddsYes = wagerData.odds?.yes ? getOddsVal(wagerData.odds.yes) : 1;
+        const oddsNo = wagerData.odds?.no ? getOddsVal(wagerData.odds.no) : 1;
 
         // Record the wager locally
         const localWager = await pool.query(
@@ -157,7 +184,7 @@ export async function POST(request: NextRequest) {
             wagerData.wagerId,
             userIdDb,
             body.marketId,
-            body.selection,
+            selectionKey,
             stakeAmount,
             oddsYes,
             oddsNo,
@@ -174,8 +201,6 @@ export async function POST(request: NextRequest) {
 
       } catch (dbError) {
         console.error("Failed to record wager locally, but core wager was successful:", dbError);
-        // This is tricky: the wager happened on the core, but our local record failed.
-        // We shouldn't fail the user request, but we need to log it.
       }
     }
 

@@ -3,12 +3,11 @@
 import { useState, useEffect } from "react";
 import { Market } from "@/types";
 import { Clock } from "lucide-react";
-
 import { getMarketImage } from "@/lib/images";
 
 interface MarketCardProps {
   market: Market;
-  onPlaceWager: (selection: "yes" | "no") => void;
+  onPlaceWager: (selection: string) => void;
 }
 
 function formatCountdown(timeRemaining: number): string {
@@ -34,13 +33,11 @@ function formatCountdown(timeRemaining: number): string {
 
 export default function MarketCard({ market, onPlaceWager }: MarketCardProps) {
   const isOpen = market.status?.toUpperCase() === "OPEN";
-  // Handle both string and number timestamps
   const closureTimestamp = typeof market.closure_timestamp === "string"
     ? parseInt(market.closure_timestamp)
     : market.closure_timestamp || 0;
 
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
-  const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
     const updateCountdown = () => {
@@ -54,14 +51,20 @@ export default function MarketCard({ market, onPlaceWager }: MarketCardProps) {
     return () => clearInterval(interval);
   }, [closureTimestamp]);
 
-  const poolYes = parseFloat(market.pool_yes) || 0;
-  const poolNo = parseFloat(market.pool_no) || 0;
-  const totalPool = parseFloat(market.total_pool) || (poolYes + poolNo);
+  const poolYes = parseFloat(market.pool_yes || "0") || 0;
+  const poolNo = parseFloat(market.pool_no || "0") || 0;
+  const totalPool = parseFloat(market.total_pool || "0") || (poolYes + poolNo);
 
-  const oddsYes = market.odds?.yes || (totalPool > 0 ? (totalPool / (poolYes || 1)) : 2);
-  const oddsNo = market.odds?.no || (totalPool > 0 ? (totalPool / (poolNo || 1)) : 2);
+  const isMulti = market.market_type === "MULTI" || (Array.isArray(market.options) && market.options.length > 0);
+  const options = isMulti ? (market.options && market.options.length > 0 ? market.options : Object.keys(market.pools || {})) : [];
 
-  // Use B2B metrics percentage when present (wager response / WebSocket), else derive from pools
+  // BINARY Market Odds & Metrics
+  const oddsYesVal = typeof market.odds?.yes === "number" ? market.odds.yes : (typeof market.odds?.yes === "object" ? market.odds.yes.decimalOdds : null);
+  const oddsNoVal = typeof market.odds?.no === "number" ? market.odds.no : (typeof market.odds?.no === "object" ? market.odds.no.decimalOdds : null);
+
+  const oddsYes = oddsYesVal || (totalPool > 0 ? (totalPool / (poolYes || 1)) : 2);
+  const oddsNo = oddsNoVal || (totalPool > 0 ? (totalPool / (poolNo || 1)) : 2);
+
   const yesPercent =
     market.metrics?.yesPercent != null
       ? Number(market.metrics.yesPercent)
@@ -72,18 +75,59 @@ export default function MarketCard({ market, onPlaceWager }: MarketCardProps) {
           : 50;
   const noPercent = market.metrics?.noPercent != null ? Number(market.metrics.noPercent) : 100 - yesPercent;
 
-  const marketImage = market.image || getMarketImage(market.category, market.title);
-  const isClosingSoon = timeRemaining > 0 && timeRemaining < 24 * 60 * 60 * 1000; // Less than 24h
+  const isClosingSoon = timeRemaining > 0 && timeRemaining < 24 * 60 * 60 * 1000;
+
+  // Helper for Multi-option details
+  const getOptionDetails = (optionLabel: string) => {
+    const optKey = optionLabel.toLowerCase();
+    const poolAmt = typeof market.pools?.[optKey] === "number"
+      ? (market.pools[optKey] as number)
+      : parseFloat(String(market.pools?.[optKey] || market.pool_data?.[optKey] || "0")) || 0;
+
+    let odds = 2.0;
+    const rawOdds = market.odds?.[optKey];
+    if (rawOdds != null) {
+      if (typeof rawOdds === "number") odds = rawOdds;
+      else if (typeof rawOdds === "object" && typeof rawOdds.decimalOdds === "number") odds = rawOdds.decimalOdds;
+    } else if (totalPool > 0 && poolAmt > 0) {
+      odds = totalPool / poolAmt;
+    }
+
+    let percent = 50;
+    if (market.probabilities && typeof market.probabilities[optKey] === "number") {
+      const p = market.probabilities[optKey];
+      percent = p <= 1 ? p * 100 : p;
+    } else if (market.metrics && market.metrics[optKey] != null) {
+      const m = market.metrics[optKey];
+      if (typeof m === "number") {
+        percent = m <= 1 ? m * 100 : m;
+      } else if (typeof m === "object" && m.probability) {
+        const parsed = parseFloat(String(m.probability).replace("%", ""));
+        if (!isNaN(parsed)) percent = parsed;
+      }
+    } else if (totalPool > 0 && poolAmt > 0) {
+      percent = (poolAmt / totalPool) * 100;
+    } else if (options.length > 0) {
+      percent = 100 / options.length;
+    }
+
+    return { optKey, odds, percent };
+  };
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm hover:shadow-xl transition-all duration-500 border border-slate-200 dark:border-slate-700 overflow-hidden h-full flex flex-col group touch-manipulation">
       <div className="p-4 sm:p-5 flex flex-col flex-grow relative z-10">
         {/* Header with Title */}
         <div className="mb-4">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
             {/* Category Tag */}
             <div className="inline-block px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border border-slate-200 dark:border-slate-600">
               {market.category}
+            </div>
+
+            {/* Market Type Tag */}
+            <div className="inline-block px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-900/30 rounded text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider border border-indigo-200 dark:border-indigo-800/50">
+              {isMulti ? "MULTI-OPTION" : "BINARY"}
             </div>
 
             {/* Live Badge */}
@@ -103,43 +147,69 @@ export default function MarketCard({ market, onPlaceWager }: MarketCardProps) {
           </h3>
         </div>
 
-
-
         {/* Odds Grid */}
         <div className="flex-grow mb-4">
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => isOpen && onPlaceWager("yes")}
-              disabled={!isOpen}
-              className="relative overflow-hidden bg-green-50 dark:bg-green-900/20 rounded-xl p-3 border-2 border-green-200 dark:border-green-800/50 transition-all duration-300 hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:grayscale group/yes"
-            >
-              <div className="flex flex-col items-center justify-center">
-                <span className="text-[10px] font-bold text-green-600 dark:text-green-400 mb-1">BUY YES</span>
-                <span className="text-lg font-black text-slate-900 dark:text-white">
-                  {oddsYes.toFixed(2)}<span className="text-xs ml-0.5">x</span>
-                </span>
-                <span className="text-[10px] font-semibold text-green-600/80 dark:text-green-400/80 mt-0.5">
-                  {yesPercent.toFixed(0)}%
-                </span>
-              </div>
-            </button>
+          {isMulti ? (
+            <div className={`grid gap-2 ${options.length <= 2 ? 'grid-cols-2' : options.length === 3 ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-3'}`}>
+              {options.map((optionLabel) => {
+                const { optKey, odds, percent } = getOptionDetails(optionLabel);
+                return (
+                  <button
+                    key={optKey}
+                    onClick={() => isOpen && onPlaceWager(optKey)}
+                    disabled={!isOpen}
+                    className="relative overflow-hidden bg-indigo-50/70 dark:bg-indigo-950/40 rounded-xl p-3 border-2 border-indigo-200 dark:border-indigo-800/60 transition-all duration-300 hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:grayscale group/opt text-center"
+                  >
+                    <div className="flex flex-col items-center justify-center">
+                      <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 mb-1 uppercase truncate max-w-full">
+                        {optionLabel}
+                      </span>
+                      <span className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                        {odds.toFixed(2)}<span className="text-xs ml-0.5">x</span>
+                      </span>
+                      <span className="text-[10px] font-semibold text-indigo-600/80 dark:text-indigo-400/80 mt-0.5">
+                        {percent.toFixed(0)}%
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => isOpen && onPlaceWager("yes")}
+                disabled={!isOpen}
+                className="relative overflow-hidden bg-green-50 dark:bg-green-900/20 rounded-xl p-3 border-2 border-green-200 dark:border-green-800/50 transition-all duration-300 hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:grayscale group/yes"
+              >
+                <div className="flex flex-col items-center justify-center">
+                  <span className="text-[10px] font-bold text-green-600 dark:text-green-400 mb-1">BUY YES</span>
+                  <span className="text-lg font-black text-slate-900 dark:text-white">
+                    {oddsYes.toFixed(2)}<span className="text-xs ml-0.5">x</span>
+                  </span>
+                  <span className="text-[10px] font-semibold text-green-600/80 dark:text-green-400/80 mt-0.5">
+                    {yesPercent.toFixed(0)}%
+                  </span>
+                </div>
+              </button>
 
-            <button
-              onClick={() => isOpen && onPlaceWager("no")}
-              disabled={!isOpen}
-              className="relative overflow-hidden bg-red-50 dark:bg-red-900/20 rounded-xl p-3 border-2 border-red-200 dark:border-red-800/50 transition-all duration-300 hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:grayscale group/no"
-            >
-              <div className="flex flex-col items-center justify-center">
-                <span className="text-[10px] font-bold text-red-600 dark:text-red-400 mb-1">BUY NO</span>
-                <span className="text-lg font-black text-slate-900 dark:text-white">
-                  {oddsNo.toFixed(2)}<span className="text-xs ml-0.5">x</span>
-                </span>
-                <span className="text-[10px] font-semibold text-red-600/80 dark:text-red-400/80 mt-0.5">
-                  {noPercent.toFixed(0)}%
-                </span>
-              </div>
-            </button>
-          </div>
+              <button
+                onClick={() => isOpen && onPlaceWager("no")}
+                disabled={!isOpen}
+                className="relative overflow-hidden bg-red-50 dark:bg-red-900/20 rounded-xl p-3 border-2 border-red-200 dark:border-red-800/50 transition-all duration-300 hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:grayscale group/no"
+              >
+                <div className="flex flex-col items-center justify-center">
+                  <span className="text-[10px] font-bold text-red-600 dark:text-red-400 mb-1">BUY NO</span>
+                  <span className="text-lg font-black text-slate-900 dark:text-white">
+                    {oddsNo.toFixed(2)}<span className="text-xs ml-0.5">x</span>
+                  </span>
+                  <span className="text-[10px] font-semibold text-red-600/80 dark:text-red-400/80 mt-0.5">
+                    {noPercent.toFixed(0)}%
+                  </span>
+                </div>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Bottom Metadata */}
@@ -156,4 +226,3 @@ export default function MarketCard({ market, onPlaceWager }: MarketCardProps) {
     </div>
   );
 }
-

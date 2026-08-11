@@ -10,14 +10,11 @@ export interface Transaction {
   marketTitle?: string; // Only for wager transactions
   selection?: string; // Only for wager transactions
   stake?: number; // Only for wager transactions
-  odds?: {
-    yes: number;
-    no: number;
-  }; // Only for wager transactions
+  odds?: Record<string, any>; // Only for wager transactions
   potentialWin?: number; // Only for wager transactions
   status?: string; // Only for wager transactions (PENDING, WON, LOST)
   timestamp: number;
-  marketStatus?: "OPEN" | "CLOSED" | "SETTLED"; // Only for wager transactions
+  marketStatus?: string; // Only for wager transactions
   payout?: number; // Actual payout amount when market is settled and user won (for wager/win)
   amount: number; // For all transaction types (positive for deposit/win, negative for withdraw/wager)
   description?: string; // Transaction description

@@ -32,7 +32,7 @@ export default function Home() {
   const [selectedTerm, setSelectedTerm] = useState<MarketTerm | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [preSelectedSelection, setPreSelectedSelection] = useState<"yes" | "no" | undefined>(undefined);
+  const [preSelectedSelection, setPreSelectedSelection] = useState<string | undefined>(undefined);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -73,7 +73,7 @@ export default function Home() {
     );
   }, [markets, searchQuery]);
 
-  const handlePlaceWager = (market: Market, selection: "yes" | "no") => {
+  const handlePlaceWager = (market: Market, selection: string) => {
     setSelectedMarket(market);
     setPreSelectedSelection(selection);
     setShowWagerModal(true);

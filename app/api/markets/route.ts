@@ -4,8 +4,13 @@ import crypto from "crypto";
 
 const DEFAULT_API_BASE_URL = process.env.API_BASE_URL || "http://localhost:3000/api/v1";
 
-const VALID_CATEGORIES = ["Crypto", "Finance", "NFL", "NBA", "Cricket", "Football", "Politics", "Election", "World", "Sports"];
+const VALID_CATEGORIES = [
+  "Crypto", "Finance", "Economy", "Tech", "NFL", "NBA", "Cricket", 
+  "Football", "Sports", "Politics", "Election", "Science", "Weather", 
+  "Geopolitics", "Culture", "Other", "World"
+];
 const VALID_TERMS = ["Ultra Short", "Short", "Long"];
+const VALID_MARKET_TYPES = ["BINARY", "MULTI"];
 
 export async function GET(request: NextRequest) {
   // Get API key from environment variable (backend only)
@@ -45,6 +50,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const category = searchParams.get("category");
     const term = searchParams.get("term");
+    const marketType = searchParams.get("market_type") || searchParams.get("marketType");
 
     // Validate and build query params
     const queryParams: Record<string, string> = {};
@@ -53,6 +59,9 @@ export async function GET(request: NextRequest) {
     }
     if (term && VALID_TERMS.includes(term)) {
       queryParams.term = term;
+    }
+    if (marketType && VALID_MARKET_TYPES.includes(marketType.toUpperCase())) {
+      queryParams.market_type = marketType.toUpperCase();
     }
 
     const response = await axios.get(apiUrl, {

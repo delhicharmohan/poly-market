@@ -5,7 +5,7 @@ import MarketCard from "./MarketCard";
 
 interface MarketsByCategoryProps {
   markets: Market[];
-  onPlaceWager: (market: Market, selection: "yes" | "no") => void;
+  onPlaceWager: (market: Market, selection: string) => void;
 }
 
 export default function MarketsByCategory({ markets, onPlaceWager }: MarketsByCategoryProps) {

@@ -96,10 +96,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate outcome
-    if (outcome !== "yes" && outcome !== "no") {
+    // Validate outcome - allow any non-empty string for lowercased outcome (BINARY or MULTI)
+    const outcomeKey = String(outcome || "").toLowerCase().trim();
+    if (!outcomeKey) {
       return NextResponse.json(
-        { message: "Invalid outcome. Must be 'yes' or 'no'" },
+        { message: "Invalid outcome. Must be a non-empty string" },
         { status: 400 }
       );
     }
@@ -169,18 +170,18 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Update all wagers for this market
+      // Update all wagers for this market (lowercased selection comparison)
       const wagerUpdateResult = await pool.query(
         `UPDATE wagers 
          SET status = CASE 
-           WHEN selection = $1 THEN 'WON'
+           WHEN LOWER(selection) = $1 THEN 'WON'
            ELSE 'LOST'
          END,
          market_status = $2,
          updated_at = CURRENT_TIMESTAMP
          WHERE market_id = $3`,
         [
-          outcome,
+          outcomeKey,
           marketStatus.toUpperCase(),
           marketId,
         ]
@@ -193,12 +194,11 @@ export async function POST(request: NextRequest) {
 
       // Credit winnings using only B2B settlement payouts (no fallback to potential_win)
       const winningWagers = await pool.query(
-        `SELECT w.id, w.wager_id, w.user_id, w.stake, w.potential_win,
-                CASE WHEN w.selection = 'yes' THEN w.odds_yes ELSE w.odds_no END as odds
+        `SELECT w.id, w.wager_id, w.user_id, w.stake, w.potential_win, w.selection
          FROM wagers w
          WHERE w.market_id = $1 
-           AND w.selection = $2`,
-        [marketId, outcome]
+           AND LOWER(w.selection) = $2`,
+        [marketId, outcomeKey]
       );
 
       // Require a wagers entry for every winning wager (won: true, payout) — we do not use potential_win

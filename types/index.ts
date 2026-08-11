@@ -1,5 +1,14 @@
-export type MarketCategory = "Crypto" | "Finance" | "NFL" | "NBA" | "Cricket" | "Football" | "Politics" | "Election" | "World" | "Sports";
+export type MarketCategory = "Crypto" | "Finance" | "Economy" | "Tech" | "NFL" | "NBA" | "Cricket" | "Football" | "Sports" | "Politics" | "Election" | "Science" | "Weather" | "Geopolitics" | "Culture" | "Other" | "World";
 export type MarketTerm = "Ultra Short" | "Short" | "Long";
+export type MarketType = "BINARY" | "MULTI";
+
+/** Detailed odds format for a market option in v2.0 API */
+export interface MarketOptionOdds {
+  decimalOdds?: number;
+  probability?: string;
+  sharePrice?: number;
+  payoutPerTen?: number;
+}
 
 /** Metrics from B2B (wager response / WebSocket). Use percentage on card when present. */
 export interface MarketMetrics {
@@ -9,16 +18,24 @@ export interface MarketMetrics {
   noPercent?: number;
   /** Single percentage (e.g. yes share); noPercent = 100 - percentage. */
   percentage?: number;
+  /** Custom option metrics for MULTI markets (keyed by lowercased option name) */
+  [option: string]: MarketOptionOdds | number | string | undefined;
 }
 
 export interface Market {
   id: string;
   title: string;
-  status: "OPEN" | "CLOSED" | "SETTLED";
+  status: "OPEN" | "CLOSED" | "RESOLVING" | "SETTLED" | string;
+  market_type?: MarketType;
   category?: MarketCategory;
   term?: MarketTerm;
-  pool_yes: string;
-  pool_no: string;
+  /** Display-friendly option labels for MULTI markets (e.g. ["BJP", "Congress", "AAP"]) */
+  options?: string[];
+  /** Pools object for MULTI markets (keyed by lowercased option name) */
+  pools?: Record<string, number | string>;
+  pool_data?: Record<string, number | string>;
+  pool_yes?: string;
+  pool_no?: string;
   total_pool: string;
   closure_timestamp: string | number;
   resolution_timestamp?: string | number;
@@ -26,9 +43,11 @@ export interface Market {
   confidence_score?: string;
   image?: string;
   odds?: {
-    yes: number;
-    no: number;
+    yes?: number | MarketOptionOdds;
+    no?: number | MarketOptionOdds;
+    [option: string]: number | MarketOptionOdds | undefined;
   };
+  probabilities?: Record<string, number>;
   /** B2B metrics (wager response / WebSocket). Use for percentage on card. */
   metrics?: MarketMetrics;
 }
@@ -37,6 +56,8 @@ export interface WagerRequest {
   marketId: string;
   selection: string;
   stake: number;
+  userId?: string;
+  marketTitle?: string;
 }
 
 export interface WagerResponse {
@@ -45,12 +66,9 @@ export interface WagerResponse {
   marketId: string;
   stake: number;
   selection: string;
-  odds?: {
-    yes: number;
-    no: number;
-  };
+  odds?: Record<string, number | MarketOptionOdds>;
   /** B2B metrics (percentage etc.). Used on market card when present. */
-  metrics?: MarketMetrics;
+  metrics?: Record<string, MarketOptionOdds | number | string>;
   /** Possible winning after platform commission. Prefer this over stake × odds in UI. */
   potentialWin?: number;
 }

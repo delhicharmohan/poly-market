@@ -11,11 +11,18 @@ interface WagerModalProps {
   market: Market;
   onClose: () => void;
   onSuccess: (result?: WagerResponse) => void;
-  preSelected?: "yes" | "no";
+  preSelected?: string;
 }
 
 export default function WagerModal({ market, onClose, onSuccess, preSelected }: WagerModalProps) {
-  const [selection, setSelection] = useState<"yes" | "no">(preSelected || "yes");
+  const isMulti = market.market_type === "MULTI" || (Array.isArray(market.options) && market.options.length > 0);
+  const options = isMulti ? (market.options && market.options.length > 0 ? market.options : Object.keys(market.pools || {})) : ["Yes", "No"];
+
+  const defaultSelection = preSelected
+    ? preSelected.toLowerCase()
+    : (isMulti && options.length > 0 ? options[0].toLowerCase() : "yes");
+
+  const [selection, setSelection] = useState<string>(defaultSelection);
   const [stake, setStake] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +41,7 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
     };
     loadBalance();
     if (preSelected) {
-      setSelection(preSelected);
+      setSelection(preSelected.toLowerCase());
     }
   }, [preSelected]);
 
@@ -46,27 +53,60 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
     }
   }, [balance, stake]);
 
-  const poolYes = parseFloat(market.pool_yes) || 0;
-  const poolNo = parseFloat(market.pool_no) || 0;
-  const totalPool = parseFloat(market.total_pool) || poolYes + poolNo;
-  const oddsYes = market.odds?.yes ?? (totalPool > 0 && poolYes > 0 ? totalPool / poolYes : 1);
-  const oddsNo = market.odds?.no ?? (totalPool > 0 && poolNo > 0 ? totalPool / poolNo : 1);
+  const poolYes = parseFloat(market.pool_yes || "0") || 0;
+  const poolNo = parseFloat(market.pool_no || "0") || 0;
+  const totalPool = parseFloat(market.total_pool || "0") || poolYes + poolNo;
 
-  // Calculate potential winnings
+  // Calculate odds for current selection
+  const getOddsForSelection = (selKey: string): number => {
+    const key = selKey.toLowerCase();
+    const rawOdds = market.odds?.[key];
+    if (rawOdds != null) {
+      if (typeof rawOdds === "number") return rawOdds;
+      if (typeof rawOdds === "object" && typeof rawOdds.decimalOdds === "number") return rawOdds.decimalOdds;
+    }
+    if (market.metrics && market.metrics[key] != null) {
+      const m = market.metrics[key];
+      if (typeof m === "number") return m;
+      if (typeof m === "object" && typeof m.decimalOdds === "number") return m.decimalOdds;
+    }
+    if (isMulti) {
+      const poolAmt = typeof market.pools?.[key] === "number"
+        ? (market.pools[key] as number)
+        : parseFloat(String(market.pools?.[key] || market.pool_data?.[key] || "0")) || 0;
+      if (totalPool > 0 && poolAmt > 0) return totalPool / poolAmt;
+      return 2.0;
+    } else {
+      if (key === "yes") return totalPool > 0 && poolYes > 0 ? totalPool / poolYes : 1.5;
+      if (key === "no") return totalPool > 0 && poolNo > 0 ? totalPool / poolNo : 1.5;
+      return 2.0;
+    }
+  };
+
+  const selectedOdds = getOddsForSelection(selection);
   const stakeAmount = parseFloat(stake) || 0;
-  const potentialWin = stakeAmount * (selection === "yes" ? oddsYes : oddsNo);
-  const profit = potentialWin - stakeAmount;
+  const potentialWin = stakeAmount * selectedOdds;
 
   // Format closure date
   const closureDate = new Date(
     typeof market.closure_timestamp === "string"
       ? parseInt(market.closure_timestamp)
-      : market.closure_timestamp
+      : market.closure_timestamp || Date.now()
   );
   const formattedDate = closureDate.toLocaleDateString("en-US", {
     month: "long",
     day: "numeric"
   });
+
+  // Display label for selection
+  const getSelectionLabel = (selKey: string): string => {
+    const key = selKey.toLowerCase();
+    if (isMulti) {
+      const found = options.find(o => o.toLowerCase() === key);
+      return found || selKey.toUpperCase();
+    }
+    return key === "yes" ? "Yes" : key === "no" ? "No" : selKey.toUpperCase();
+  };
 
   const handleIncrement = (amount: number) => {
     const current = parseFloat(stake) || 0;
@@ -106,8 +146,9 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
     try {
       const result = await api.placeWager({
         marketId: market.id,
-        selection,
+        selection: selection.toLowerCase(),
         stake: stakeAmount,
+        marketTitle: market.title,
       });
 
       // Refresh balance after successful wager (deduction happens on server)
@@ -163,16 +204,14 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
                 <span className="font-medium">Wager ID:</span> {wagerResult.wagerId}
               </div>
               <div>
-                <span className="font-medium">Selection:</span> {wagerResult.selection.toUpperCase()}
+                <span className="font-medium">Selection:</span> {getSelectionLabel(wagerResult.selection)}
               </div>
               <div>
                 <span className="font-medium">Stake:</span> ${wagerResult.stake.toFixed(2)}
               </div>
               <div>
                 <span className="font-medium">Odds:</span>{" "}
-                {wagerResult.odds?.[wagerResult.selection as "yes" | "no"] != null
-                  ? `${Number(wagerResult.odds[wagerResult.selection as "yes" | "no"]).toFixed(2)}x`
-                  : "—"}
+                {selectedOdds ? `${selectedOdds.toFixed(2)}x` : "—"}
               </div>
               <div>
                 <span className="font-medium">Possible winning:</span>{" "}
@@ -181,10 +220,8 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
                   if (fromB2B != null && !isNaN(fromB2B) && fromB2B >= 0) {
                     return `$${Number(fromB2B).toFixed(2)} (after commission)`;
                   }
-                  const oddsVal = wagerResult.odds?.[wagerResult.selection as "yes" | "no"];
-                  const computed = typeof oddsVal === "number" && oddsVal > 0 ? wagerResult.stake * oddsVal : 0;
-                  if (computed > wagerResult.stake) {
-                    return `$${computed.toFixed(2)} (before commission)`;
+                  if (potentialWin > wagerResult.stake) {
+                    return `$${potentialWin.toFixed(2)} (before commission)`;
                   }
                   return "— (calculated at settlement, after commission)";
                 })()}
@@ -207,7 +244,7 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-slate-800 dark:bg-slate-900 rounded-xl shadow-2xl max-w-md w-full p-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 rounded bg-slate-700 flex items-center justify-center">
               <span className="text-white text-xs">📊</span>
@@ -220,6 +257,42 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
           >
             <X className="h-5 w-5" />
           </button>
+        </div>
+
+        <div className="mb-4">
+          <h3 className="text-lg font-bold text-white leading-snug">{market.title}</h3>
+        </div>
+
+        {/* Selection Options Pill Selector */}
+        <div className="mb-5">
+          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+            Select Outcome
+          </label>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {options.map((optLabel) => {
+              const optKey = optLabel.toLowerCase();
+              const isSelected = selection === optKey;
+              const oddsVal = getOddsForSelection(optKey);
+              return (
+                <button
+                  key={optKey}
+                  type="button"
+                  onClick={() => {
+                    setSelection(optKey);
+                    setError(null);
+                  }}
+                  className={`flex-1 py-2.5 px-3 rounded-lg border text-sm font-bold transition-all flex flex-col items-center justify-center whitespace-nowrap min-w-[70px] ${
+                    isSelected
+                      ? "bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400"
+                      : "bg-slate-700/60 border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white"
+                  }`}
+                >
+                  <span>{optLabel}</span>
+                  <span className="text-xs font-semibold opacity-80 mt-0.5">{oddsVal.toFixed(2)}x</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {error && (
@@ -242,7 +315,6 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
                 onChange={(e) => {
                   const inputValue = e.target.value;
                   const numValue = parseFloat(inputValue);
-                  // If valid number, cap it at balance
                   if (!isNaN(numValue)) {
                     const cappedValue = Math.min(numValue, balance);
                     setStake(cappedValue.toFixed(2));
@@ -252,7 +324,6 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
                   setError(null);
                 }}
                 onBlur={(e) => {
-                  // On blur, ensure value doesn't exceed balance
                   const numValue = parseFloat(e.target.value);
                   if (!isNaN(numValue)) {
                     const cappedValue = Math.min(Math.max(numValue, 0.01), balance);
@@ -309,7 +380,7 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
             disabled={loading || !stake || parseFloat(stake) <= 0 || parseFloat(stake) > balance}
             className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-lg font-semibold text-lg transition-colors flex flex-col items-center justify-center touch-manipulation"
           >
-            <span>Buy {selection === "yes" ? "Yes" : "No"}</span>
+            <span>Buy {getSelectionLabel(selection)}</span>
             {stakeAmount > 0 && (
               <span className="text-emerald-200 text-sm font-normal mt-1">
                 To win ${potentialWin.toFixed(2)}
@@ -321,5 +392,3 @@ export default function WagerModal({ market, onClose, onSuccess, preSelected }: 
     </div>
   );
 }
-
-

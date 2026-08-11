@@ -41,8 +41,8 @@ export default function BreakingPage() {
   };
 
   const calculatePercentage = (market: Market): number => {
-    const poolYes = parseFloat(market.pool_yes);
-    const poolNo = parseFloat(market.pool_no);
+    const poolYes = parseFloat(market.pool_yes || "0") || 0;
+    const poolNo = parseFloat(market.pool_no || "0") || 0;
     const totalPool = poolYes + poolNo;
     if (totalPool === 0) return 50;
     return Math.round((poolYes / totalPool) * 100);

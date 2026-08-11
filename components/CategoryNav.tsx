@@ -7,7 +7,7 @@ interface CategoryNavProps {
   onCategoryChange: (category: MarketCategory | null) => void;
 }
 
-const CATEGORIES: MarketCategory[] = ["Crypto", "Finance", "NFL", "NBA", "Cricket", "Football", "Politics", "Election"];
+const CATEGORIES: MarketCategory[] = ["Crypto", "Finance", "Economy", "Tech", "NFL", "NBA", "Cricket", "Football", "Sports", "Politics", "Election", "Science", "Weather", "Geopolitics", "Culture", "Other"];
 
 export default function CategoryNav({
   selectedCategory,

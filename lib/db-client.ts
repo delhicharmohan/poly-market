@@ -56,7 +56,7 @@ export class DatabaseClient {
     marketTitle: string;
     selection: string;
     stake: number;
-    odds: { yes: number; no: number };
+    odds: Record<string, any>;
     potentialWin: number;
     status: string;
     marketStatus?: string;

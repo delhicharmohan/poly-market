@@ -90,13 +90,54 @@ describe("POST /api/webhooks/settlement", () => {
     expect(data.message).toMatch(/Missing required fields/i);
   });
 
-  it("returns 400 for invalid outcome (not yes/no)", async () => {
-    const body = makeSettlementPayload({ outcome: "maybe" });
+  it("returns 400 for empty outcome", async () => {
+    const body = makeSettlementPayload({ outcome: "" });
     const req = makeRequest(body);
     const res = await POST(req);
     expect(res.status).toBe(400);
     const data = await res.json();
-    expect(data.message).toMatch(/Invalid outcome/i);
+    expect(data.message).toMatch(/Missing required fields|Invalid outcome/i);
+  });
+
+  it("supports MULTI market custom outcome in settlement webhook", async () => {
+    const body = makeSettlementPayload({
+      marketId: "multi-market-1",
+      outcome: "bjp",
+      wagers: [
+        { wagerId: "wager-abc", won: true, payout: 190.00 }
+      ]
+    });
+    const req = makeRequest(body);
+
+    // BEGIN
+    mockQuery.mockResolvedValueOnce({});
+    // Market check
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: "multi-market-1", title: "Test", status: "OPEN" }] });
+    // Market update
+    mockQuery.mockResolvedValueOnce({ rowCount: 1 });
+    // Wager status update
+    mockQuery.mockResolvedValueOnce({ rowCount: 1 });
+    // Winning wagers query
+    mockQuery.mockResolvedValueOnce({
+      rows: [
+        { id: "w-uuid-1", wager_id: "wager-abc", user_id: "u1", stake: 100, potential_win: 200, selection: "bjp" },
+      ],
+    });
+    // Check if already credited
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    // Update wager actual_payout
+    mockQuery.mockResolvedValueOnce({});
+    // User balance query
+    mockQuery.mockResolvedValueOnce({ rows: [{ balance: "500" }] });
+    // Insert wallet transaction
+    mockQuery.mockResolvedValueOnce({});
+    // COMMIT
+    mockQuery.mockResolvedValueOnce({});
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.outcome).toBe("bjp");
   });
 
   it("returns 400 for unsupported event type", async () => {

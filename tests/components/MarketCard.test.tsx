@@ -150,4 +150,34 @@ describe("MarketCard", () => {
     // Should show a countdown, not "Closed"
     expect(screen.queryByText("Closed")).not.toBeInTheDocument();
   });
+
+  it("renders MULTI-OPTION market with custom options and triggers onPlaceWager with lowercased key", () => {
+    const onPlaceWager = vi.fn();
+    const multiMarket: Market = {
+      id: "multi-1",
+      title: "Which party will win the most seats?",
+      status: "OPEN",
+      market_type: "MULTI",
+      category: "Election",
+      options: ["BJP", "Congress", "AAP"],
+      pools: { bjp: 5000, congress: 3000, aap: 2000 },
+      total_pool: "10000",
+      closure_timestamp: (Date.now() + 86400000).toString(),
+      odds: {
+        bjp: { decimalOdds: 2.0, probability: "50%" },
+        congress: { decimalOdds: 3.33, probability: "30%" },
+        aap: { decimalOdds: 5.0, probability: "20%" },
+      },
+    };
+
+    render(<MarketCard market={multiMarket} onPlaceWager={onPlaceWager} />);
+
+    expect(screen.getByText("MULTI-OPTION")).toBeInTheDocument();
+    expect(screen.getByText("BJP")).toBeInTheDocument();
+    expect(screen.getByText("Congress")).toBeInTheDocument();
+    expect(screen.getByText("AAP")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("BJP").closest("button")!);
+    expect(onPlaceWager).toHaveBeenCalledWith("bjp");
+  });
 });
