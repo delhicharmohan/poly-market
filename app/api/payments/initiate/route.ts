@@ -91,17 +91,21 @@ export async function POST(request: NextRequest) {
     const customerEmail = sanitizeEmail(userEmail);
     const customerPhone = sanitizePhone("9999999999");
 
-    // Query default payin gateway from database configuration if set
-    let selectedGateway = gateway;
-    try {
-      const gatewaySettingResult = await pool.query(
-        "SELECT value FROM gateway_settings WHERE key = 'payin_gateway'"
-      );
-      if (gatewaySettingResult.rows.length > 0) {
-        selectedGateway = gatewaySettingResult.rows[0].value;
+    // Determine payin gateway:
+    // 1. Explicit `gateway` parameter from request body ("gateway", "xpaysafe", "p2p", etc.)
+    // 2. Fall back to database default (`gateway_settings` table) if gateway parameter was not provided
+    let selectedGateway: string | undefined = gateway;
+    if (!selectedGateway) {
+      try {
+        const gatewaySettingResult = await pool.query(
+          "SELECT value FROM gateway_settings WHERE key = 'payin_gateway'"
+        );
+        if (gatewaySettingResult?.rows && gatewaySettingResult.rows.length > 0) {
+          selectedGateway = gatewaySettingResult.rows[0].value;
+        }
+      } catch (dbErr) {
+        console.error("Failed to query payin_gateway setting, using fallback:", dbErr);
       }
-    } catch (dbErr) {
-      console.error("Failed to query payin_gateway setting, using parameter fallback:", dbErr);
     }
 
     // Route based on resolved gateway
