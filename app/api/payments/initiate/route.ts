@@ -121,11 +121,12 @@ export async function POST(request: NextRequest) {
       try {
         const payinResponse = await createP2PPayin({
           amountInr: amount,
+          customerId: `CUST_${userIdDb}`,
           externalRef: orderId,
+          customerName,
+          customerEmail,
           returnUrl,
           metadata: {
-            customer_name: customerName,
-            customer_email: customerEmail,
             painting_id: paintingId,
           },
         });

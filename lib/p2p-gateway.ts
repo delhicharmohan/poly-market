@@ -4,8 +4,11 @@ import crypto from "crypto";
 
 export interface P2PPayinParams {
   amountInr: number;
+  customerId: string;
   externalRef: string;
   returnUrl: string;
+  customerName?: string;
+  customerEmail?: string;
   metadata?: Record<string, any>;
 }
 
@@ -110,7 +113,10 @@ export async function createP2PPayin(params: P2PPayinParams): Promise<P2PPayinRe
   const payload = {
     amount_paise: amountPaise,
     currency: "INR",
+    customer_id: params.customerId,
     external_ref: params.externalRef,
+    customer_name: params.customerName,
+    customer_email: params.customerEmail,
     return_url: params.returnUrl,
     metadata: params.metadata,
   };
