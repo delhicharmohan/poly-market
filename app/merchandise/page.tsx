@@ -89,6 +89,16 @@ function MerchandiseContent() {
 
   const [activeTab, setActiveTab] = useState<"gateway" | "p2p">("p2p");
 
+  // Preselect the deposit method configured by admin (Gateways tab).
+  useEffect(() => {
+    fetch("/api/payments/gateway")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s) => {
+        if (s?.payin_gateway) setActiveTab(s.payin_gateway === "xpaysafe" ? "gateway" : "p2p");
+      })
+      .catch(() => {});
+  }, []);
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">

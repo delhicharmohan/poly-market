@@ -386,16 +386,24 @@ function GatewayManager() {
     fetchSettings();
   }, []);
 
-  const handleSave = async () => {
+  const handleSave = async (override?: { payin: "p2p" | "xpaysafe"; payout: "p2p" | "xpaysafe" }) => {
+    const nextPayin = override?.payin ?? payin;
+    const nextPayout = override?.payout ?? payout;
     setError(null);
     setSuccess(null);
     setSaving(true);
     try {
       await dbClient.updateGatewaySettings({
-        payin_gateway: payin,
-        payout_gateway: payout,
+        payin_gateway: nextPayin,
+        payout_gateway: nextPayout,
       });
-      setSuccess("Gateway configuration saved successfully!");
+      setPayin(nextPayin);
+      setPayout(nextPayout);
+      setSuccess(
+        override
+          ? `Payin and payout both set to ${nextPayin === "p2p" ? "P2P" : "XPaySafe Standard"}.`
+          : "Gateway configuration saved successfully!"
+      );
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.response?.data?.message || err.message || "Failed to save gateway settings");
@@ -433,6 +441,43 @@ function GatewayManager() {
         )}
 
         <div className="space-y-4">
+          {/* Quick presets: set both payin and payout in one click */}
+          <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Set both Payin &amp; Payout</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                Current: {payin === "p2p" ? "P2P" : "Standard"} / {payout === "p2p" ? "P2P" : "Standard"}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {([
+                { value: "xpaysafe", label: "All Standard (XPaySafe)", icon: "💳" },
+                { value: "p2p", label: "All P2P", icon: "⚡" },
+              ] as const).map((preset) => {
+                const active = payin === preset.value && payout === preset.value;
+                return (
+                  <button
+                    key={preset.value}
+                    type="button"
+                    disabled={saving || active}
+                    onClick={() => handleSave({ payin: preset.value, payout: preset.value })}
+                    className={`py-3 px-4 rounded-xl border-2 font-semibold text-sm transition-all flex items-center justify-center gap-2 disabled:cursor-not-allowed ${
+                      active
+                        ? "bg-indigo-600 border-indigo-600 text-white"
+                        : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-indigo-400 disabled:opacity-50"
+                    }`}
+                  >
+                    <span>{preset.icon}</span> {preset.label}
+                    {active && <span className="text-xs font-medium opacity-80">(active)</span>}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Applies and saves immediately. Use the options below to set Payin and Payout separately.
+            </p>
+          </div>
+
           {/* Payin Select */}
           <div className="space-y-2">
             <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
@@ -510,7 +555,7 @@ function GatewayManager() {
 
         <div className="pt-4 flex justify-end">
           <button
-            onClick={handleSave}
+            onClick={() => handleSave()}
             disabled={saving}
             className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg font-semibold text-sm transition-colors flex items-center gap-2 shadow-sm"
           >
